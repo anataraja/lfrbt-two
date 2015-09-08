@@ -31,18 +31,18 @@ void seek(thread_data_t * data, oprec_t * O, long key, seekrec_t * R){
   }
 	
   if(candidate != NULL){
-    std::cout << "HERE" << std::endl;	
+    //std::cout << "HERE" << std::endl;	
     AO_t curContents = (candidate->opData);
 
-#ifdef DEBUG	
+//#ifdef DEBUG	
   int depth=0;
-#endif    
+//#endif    
   bool flag = false;
  
   while(!is_external_node(candidate)){
-#ifdef DEBUG      
+//#ifdef DEBUG      
     depth++;
-#endif
+//#endif
       
     if(opn == 1 && !flag){
 	    // Delete operation.
@@ -74,12 +74,12 @@ void seek(thread_data_t * data, oprec_t * O, long key, seekrec_t * R){
 		  curContents = nextContents;
 		  //curDNode = (dataNode_t *)extract_dnode_from_ptrnode(curContents);
 
-#ifdef DEBUG		
+//#ifdef DEBUG		
 		  if(depth > 1000){
 	  		std::cout << "Iterations Exceeded__111r" << std::endl;
 	  		exit(0);
   		}
-#endif  		
+//#endif  		
 	}
 	
 	// curDNode is leaf node

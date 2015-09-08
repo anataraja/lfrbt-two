@@ -95,6 +95,7 @@ node_t * check_insert_case_2(thread_data_t * data, node_t * wRootChildCopy, long
 #endif
 				if(leftChild->color == BLACK){
 					nextNode->opData = combine_oprec_status_child_opdata(O,OWNED,LEFT,NOT_INITIAL,NOT_GUARDIAN);
+					nextNode->creator = 98+depth;
 					nextNode->markedRoot = nextNode->parent;
                                         if(nextNode->parent == NULL){
                                           nextNode->markedRoot = wRootChildCopy;
@@ -113,6 +114,7 @@ node_t * check_insert_case_2(thread_data_t * data, node_t * wRootChildCopy, long
 #endif
 				if(rightChild->color == BLACK){
 				  nextNode->opData = combine_oprec_status_child_opdata(O,OWNED,RIGHT,NOT_INITIAL,NOT_GUARDIAN);
+				  nextNode->creator = 117+depth;
 					nextNode->markedRoot = nextNode->parent;
                                         if(nextNode->parent == NULL){
                                           nextNode->markedRoot = wRootChildCopy;
@@ -514,6 +516,7 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 				wRootChildCopy->move = nextRoot;
 				
 				nextNode->opData = 	combine_oprec_status_child_opdata(O,OWNED,LEFT,NOT_INITIAL,NOT_GUARDIAN);
+				nextNode->creator = 519;
 				nextNode->markedRoot = nextRoot;	
 		 		
 		 	}
@@ -631,6 +634,7 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 				finalWRoot->move = nextRoot;
 				//finalWRoot->mover = 774;
 				nextNode->opData = 	combine_oprec_status_child_opdata(O,OWNED,LEFT,NOT_INITIAL,NOT_GUARDIAN);
+				nextNode->creator = 637;
 				nextNode->markedRoot = nextRoot;
 		 	}
 		 	else{
@@ -665,6 +669,7 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 				
 				wRootChildCopy->move = nextRoot;
 				nextNode->opData = combine_oprec_status_child_opdata(O,OWNED,LEFT,NOT_INITIAL,NOT_GUARDIAN);
+				nextNode->creator = 672;
 				nextNode->markedRoot = nextRoot;
 		 	}
 		 	else{
@@ -753,8 +758,8 @@ node_t * get_next_node_on_access_path(thread_data_t * data, int pid, node_t * wR
 			  }
 		  }
 #endif		  						
-		  data->madeDecision = true;						
-		  return NULL;
+               data->madeDecision = true;
+               return NULL;
 	  } 
   }
 	

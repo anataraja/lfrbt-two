@@ -25,6 +25,19 @@ void update_location(thread_data_t * data, node_t * node, AO_t state, int id){
       assert(!is_node_owned(newState));
       
       int result0 = atomic_cas_full1(data, node, state, newState);
+      
+      if(result0 == 1){
+        node->creator = 30;
+      }
+      
+      
+      AO_t old_state = node->opData;
+      if((oprec_t *)extract_oprec_from_opdata(old_state) == helpeeOprec &&
+          is_node_owned(old_state)){
+        std::cout << "Fishy" << std::endl;    
+        exit(0);
+      }
+      
    }  
       /// Step 3e: Update (the data record with new location of the guardian node)
       AO_t currentWindowLoc = helpeeOprec->windowLoc;
@@ -69,7 +82,7 @@ node_t * find_guardian(thread_data_t * data, node_t * node, AO_t state){
   else if(is_initial_txn(state)){
     data->lastCase0 = 2;
     oprec_t * helpeeOprec = (oprec_t *)extract_oprec_from_opdata(state);
-    return (get_address_from_addresses(helpeeOprec->sr->addresses[0]));
+    return ((node_t *)get_address_from_addresses(helpeeOprec->sr->addresses[0]));
   }
   else{
     data->lastCase0 = 3;

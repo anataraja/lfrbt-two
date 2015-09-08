@@ -244,7 +244,6 @@ node_t * perform_external_node_replacement(thread_data_t * data, int pid, node_t
 
 
 node_t * insert(thread_data_t * data, int pid, long key, node_t * wRoot, node_t * wRootChild, AO_t casField, oprec_t * O){
-std::cout << "Here001" << std::endl;	
   node_t * bot = (node_t *)map_word_to_bot_address(1);
   int currentWindowSize = 3;
   bool case2flag = false;
@@ -536,13 +535,13 @@ int perform_one_window_operation(thread_data_t* data, node_t* pRoot, oprec_t * O
 	    if(opn == 2){
 	      // insert operation
 	      temp = 878;
-        std::cout << "going to insert__" << data->id << std::endl;
+        //std::cout << "going to insert__" << data->id << std::endl;
 		    nextRoot1 = insert(data, O->pid, key, pRoot, pRootChild, pRootContents , O);
-		    std::cout << "Done insert__" << data->id << std::endl;
+		 //   std::cout << "Done insert__" << data->id << std::endl;
 	    }
 	    else if(opn == 1){
 	      // delete operation
-	      std::cout << "going to delete__" << data->id << std::endl;
+	      //std::cout << "going to delete__" << data->id << std::endl;
 	      temp = 892;
  		    bool case2flag = false;
         node_t * wRootChildCopy = make_delete_window_copy(data, pRootChild, key, pRoot, pRootContents,O);
@@ -566,7 +565,7 @@ int perform_one_window_operation(thread_data_t* data, node_t* pRoot, oprec_t * O
 			    }
 			   nextRoot1 = get_next_node_on_delete_access_path(data, key, pRoot, wRootChildCopy, pRootChild, pRootContents, O, case2flag);
 		    }
-		    std::cout << "Done Delete__" << data->id << std::endl;
+		    //std::cout << "Done Delete__" << data->id << std::endl;
       } 
      
   }
@@ -763,6 +762,11 @@ bool validate(thread_data_t * data, oprec_t * O){
 */
 
 void abort(thread_data_t * data, oprec_t * O){
+  AO_t curWord = O->windowLoc;
+  if(extract_status_from_oprecord(curWord) != ABORTED){
+    std::cout << "Error. Aborting without setting status" << std::endl;      
+    exit(0);
+  }
   /// release the ownership of all the nodes owned in a bottom-up manner.
   int index = O->sr->length - 2;
   int  i = 0;
@@ -772,14 +776,28 @@ void abort(thread_data_t * data, oprec_t * O){
       std::cout << "Hello!!!" << std::endl;
       exit(0);
     }
-    node_t * node = (node_t *)get_address_from_addresses(O->sr->addresses[index]);
-    assert(node != NULL);
-    AO_t state = node->opData;
+    AO_t word = O->sr->addresses[index];
+    node_t * curNode = (node_t *)get_address_from_addresses(word);
+    if(curNode == NULL){
+      std::cout << "Unexpected" << std::endl;
+      exit(0);
+    }
+    AO_t state = curNode->opData;
     bool result;
     if((oprec_t *)extract_oprec_from_opdata(state) == O && is_node_owned(state)){
       /// release the ownership of the node.
       AO_t newState = make_node_not_owned(state);
-      result = atomic_cas_full1(data, node, state, newState);
+      
+      assert(!is_node_owned(newState));
+      
+      result = atomic_cas_full1(data, curNode, state, newState);
+      
+      AO_t old_state = curNode->opData;
+if((oprec_t *)extract_oprec_from_opdata(old_state) == O
+   && is_node_owned(old_state)){
+        std::cout << "Fishy11" << std::endl;    
+        exit(0);
+      }
     }
     else{
       result = true;
@@ -805,10 +823,10 @@ int inject(thread_data_t * data, oprec_t * O){
 	AO_t status = extract_status_from_oprecord(O->windowLoc);
 	while(status == TRYING){
 	  /// find node whose ownership needs to be acquired next
-	  node_t * current = get_address_from_addresses(R->addresses[index]);
+	  node_t * current = (node_t *)get_address_from_addresses(R->addresses[index]);
     //std::cout << "__" << current <<" __" << R->addresses[0] <<  std::endl; 
 	  /// find the next node in the c-path
-	  node_t * next = get_address_from_addresses(R->addresses[index+1]);
+	  node_t * next = (node_t *)get_address_from_addresses(R->addresses[index+1]);
 	  
 	  AO_t childWord;
 	  node_t * child;
@@ -839,12 +857,25 @@ int inject(thread_data_t * data, oprec_t * O){
 	    if((child != next) || (is_node_marked(state))){
 	      /// the link from the current to next does not exist, or current has been marked for removal
 	      O->windowLoc = combine_position_status_oprecord(NULL, ABORTED);
-	      O->changer = 842;
+	      if(data->id != O->pid)
+	        O->changer = 842;
+	      else{
+	        if(is_node_marked(state)){
+	          if(data->lastAbortMarked == current){
+	            std::cout << "Active Marked Node?" << std::endl;
+	            exit(0);
+	          }
+	          else{
+	            data->lastAbortMarked = current;
+	          } 
+	        }   
+	      }
 	      break;
 	    }
 	    if(is_node_owned(state)){
 	      /// help the conflicting operation move out of the way
 	      help(data, N, current, state, 1282);
+	      continue;
 	    }
 	    
 	    if(N != NULL && (is_node_guardian(state))){
@@ -872,9 +903,20 @@ int inject(thread_data_t * data, oprec_t * O){
 	    }
 	    else{
               //std::cout << "Am here" << std::endl;
-	      O->windowLoc = combine_position_status_oprecord(get_address_from_addresses(R->addresses[0]), INJECTED);
-	      O->changer = 876;
-  	node_t * nextRoot = (node_t *)extract_position_from_oprecord(O->windowLoc);
+	      // Perform a cas to change the status bits to injected.
+	      // Needs to be a CAS here, as some other thread may have helped the
+	      // operation complete and then this thread sets the windowLoc
+	      // to R->addresses[0]
+	      
+	      int res = atomic_cas_full(&O->windowLoc,combine_position_status_oprecord((node_t*)get_address_from_addresses(R->addresses[0]), TRYING), combine_position_status_oprecord(get_address_from_addresses(R->addresses[0]), INJECTED) );
+	     //O->windowLoc = combine_position_status_oprecord(get_address_from_addresses(R->addresses[0]), INJECTED);
+	      if(res == 1){
+	        if(O->pid == data->id)
+	          O->changer = 876;
+	        else
+	          O->changer = 877;
+	      }
+  	//node_t * nextRoot = (node_t *)extract_position_from_oprecord(O->windowLoc);
         //std::cout << "powo__" << nextRoot << std::endl; 
 	    }
 	    
@@ -921,6 +963,7 @@ void execute_operation(thread_data_t* data, oprec_t * O){
 		oprec_t * N = (oprec_t*)extract_oprec_from_opdata(word);
   		std::cout << "Iterations Exceeded__1302" << std::endl;
   		exit(0);
+  		iter = 0;
   	}
   	
   	  curLoc = O->windowLoc;	
@@ -983,7 +1026,6 @@ void pre_insert(thread_data_t * data, long key){
  	
  	int iter = 0;
  	
-	std::cout << "Insert__" << data->numInsert << std::endl;
  
  	while(true){
  		iter++;
@@ -1018,14 +1060,11 @@ void pre_insert(thread_data_t * data, long key){
 			
 			int curStatus = extract_status_from_oprecord(O->windowLoc);
   	node_t * nextRoot = (node_t *)extract_position_from_oprecord(O->windowLoc);
-        std::cout << "powo__" << nextRoot << std::endl; 
 			
 			if(curStatus == INJECTED){
-			  std::cout << "Successfully injected" << std::endl;
 			  execute_operation(data, O);
 			}
 			else{
-			  std::cout << "3" << std::endl;
 			  continue;
 			}
 		
@@ -1044,410 +1083,180 @@ void pre_insert(thread_data_t * data, long key){
 
 
 void *testRW(void *data){
-   long value;
-   double action;
-   double ksSelect;
-   Word key;
-   thread_data_t *d = (thread_data_t *)data;
+  long value;
+  double action;
+  double ksSelect;
+  Word key;
+  thread_data_t *d = (thread_data_t *)data;
    
-   //sTable_t * ST = *(d->stable);
-        
   /* Wait on barrier */
   barrier_cross(d->barrier);
-  
 
-while (stop == 0) {
-	d->case2 = 0;
-	//d->samehelpcount = 0;
-	d->case1 = 0;
-     // determine what we're going to do
-     action = (double)rand_r(&d->seed) / (double) RAND_MAX;
+  while (stop == 0) {
+  	d->case2 = 0;
+  	d->case1 = 0;
+    
+    // determine what we're going to do
+    action = (double)rand_r(&d->seed) / (double) RAND_MAX;
    
   	key = rand_r(&d->seed) % (d->keyspace1_size);
-	      while(key == 0){
-	      	key = rand_r(&d->seed) % (d->keyspace1_size);
-	      } 
-   
-   	
-     if (action <= d->search_frac)
-     {
-   
-  	
-   
-   	//auto search_start = std::chrono::high_resolution_clock::now();
-    	
-    	
-    	
-    	
-    	search(d, key);
-    	
-	
-	
-	//auto search_end = std::chrono::high_resolution_clock::now();
-	
-	//auto search_dur = std::chrono::duration_cast<std::chrono::microseconds>(search_end - search_start);
-	
-	//d->tot_read_time += search_dur.count();
-	//d->tot_reads++;
-     
-     }
-    
+	  while(key == 0){
+	    key = rand_r(&d->seed) % (d->keyspace1_size);
+	  } 
+
+    if (action <= d->search_frac){
+   	  //auto search_start = std::chrono::high_resolution_clock::now();
+      search(d, key);
+	    //auto search_end = std::chrono::high_resolution_clock::now();
+    	//auto search_dur = std::chrono::duration_cast<std::chrono::microseconds>(search_end - search_start);
+    	//d->tot_read_time += search_dur.count();
+	    //d->tot_reads++;
+    }
           
     else if (action > d->search_frac && action <= (d->search_frac + d->insert_frac))
-     {
-	// Insert Operation
-	
-	//auto ins_start = std::chrono::high_resolution_clock::now();
-	//std::cout << "Insert" << std::endl;
-	//valrec_t * reskvp = NULL;
-	long leafKey = update_search(d, key); 
-	
-	
-	if(leafKey != key){
-	
-	oprec_t * O = (oprec_t *)get_new_opRecord(d);
-    	O->op = map_key_to_insert_operation(key);
- 	O->pid = d->id;
- 	//O->state = combine_position_status_oprecord(d->rootOfTree);
+    {
+	    // Insert Operation
+   	  //auto ins_start = std::chrono::high_resolution_clock::now();
+	    long leafKey = update_search(d, key); 
+	    if(leafKey != key){
+	      // Key is not present in the tree. Should be inserted.
+	      oprec_t * O = (oprec_t *)get_new_opRecord(d);
+    	  O->op = map_key_to_insert_operation(key);
+ 	      O->pid = d->id;
+        seekrec_t * R = (seekrec_t *)get_new_seekRecord(d);
+ 	      O->sr = R;
+     	  int iter = 0;
+ 	      int lastCase = 0;
  	
+ 	      node_t * ld1 = NULL;
+ 	      node_t * ld0 = NULL;
+ 	      d->lastAborted = NULL;
  	
- 	seekrec_t * R = (seekrec_t *)get_new_seekRecord(d);
- 	
- 	// create datanode copies, whose contents are populated during validation
- 	
- 	//R->dcopies = (dataNode_t *)malloc(2*sizeof(dataNode_t));
- 	/*for(int k = 0; k < 2; k++){
- 		R->dcopies[k] = (dataNode_t *)malloc(sizeof(dataNode_t));	
- 	}*/
- 	
- 	//O->seq = d->seqNo++;
- 	O->sr = R;
- 	
- 	int iter = 0;
- 	int lastCase = 0;
- 	
- 	node_t * ld1 = NULL;
- 	node_t * ld0 = NULL;
- 	d->lastAborted = NULL;
- 	
-	while(true){
-		iter++;
-		if(iter > 100000){
-			std::cout << "Iterations exceeded11__" << lastCase << "__" << d->case1  << "__" << d->case2 << std::endl;
-			exit(0);
-			
-		}
+	      while(true){
+		      iter++;
+		      if(iter > 100000){
+			      std::cout << "Iterations exceeded11__" << lastCase << "__" << d->case1  << "__" << d->case2 << std::endl;
+			      exit(0);
+		      }
 		
+		      for(int i1 = 0; i1 < 4; i1++){
+			      R->addresses[i1] = NULL;
+			      R->contents[i1] = 0;
+		      }
 		
-		for(int i1 = 0; i1 < 4; i1++){
-			R->addresses[i1] = NULL;
-			R->contents[i1] = 0;
-		}
-		
-		seek(d, O, key, R);
-	
-	
-	
-		if(R->leafKey == key){
-		
-			// key already present in the tree. Terminate
-	
-			/*if(try_fast_update(d, reskvp) == 0){
-				// fast update failed. Perform slow update
-			
-				slow_update(d, reskvp);	
-			}*/
-		
-		
-		
-			//auto ins_end = std::chrono::high_resolution_clock::now();
-	
-			//auto ins_dur = std::chrono::duration_cast<std::chrono::microseconds>(ins_end - ins_start);
-		
-			//d->tot_update_time += ins_dur.count();
-			//d->tot_update_count++;
-			break;
-		
-		}
-		else{
-			
-			/*if(!validate(d, O)){
-				// validation failed. Restart seek.
-				lastCase = 1;
-				
-				//TODO: FIX THIS!!
-				//if(R->addresses[] != NULL){
-				//	ld1 = (dataNode_t *)extract_dnode_from_ptrnode(R->contents[1]);
-				//}
-				
-				//if(R->addresses[] != NULL){
-				//	ld0 = (dataNode_t *)extract_dnode_from_ptrnode(R->contents[0]);
-				//}
-				
-				continue;
-			} */
-			
-			// validation successful. Inject operation into the tree at R->addresses[0]
-			
-			O->windowLoc = combine_position_status_oprecord((node_t *)get_address_from_addresses(R->addresses[0]),TRYING);
-			O->changer = 1193;
-			int res = inject(d, O);
-			
-			int curStatus = extract_status_from_oprecord(O->windowLoc);
-			
-			if(curStatus == INJECTED){
-			  execute_operation(d, O);
-			}
-			else{
-			  continue;
-			}
-			/*if(res == 1){
-				// operation successfully injected. Execute sequence of window transactions.
-				// std::cout << "insert" << std::endl; 	
-				
-				
-				execute_operation(d, O);
-				//d->seqNo++;
-				//blackCount = -1;
-				//check_black_count(d->rootOfTree, 0);	
-				
-			}
-			else if(res == 2){
-				// injection failed. Restart seek
-				//Can reuse O and R
-				for(int i1 = 0; i1 < 4; i1++){
-					R->addresses[i1] = NULL;
-					R->contents[i1] = 0;
-				}
-					
-				lastCase = 2;	
-				continue;
-			}
-			else {
-				// New O and R
-				O = (oprec_t *)get_new_opRecord(d);
-				O->op = map_key_to_insert_operation(key);
-				O->pid = d->id;
- 	
- 	
-			 	R = (seekrec_t *)get_new_seekRecord(d);
-			 	//O->seq = d->seqNo++;
- 				O->sr = R;
-			 	continue;
-			}*/
-			
-		
-		
-			//auto ins_end = std::chrono::high_resolution_clock::now();
-	
-			//auto ins_dur = std::chrono::duration_cast<std::chrono::microseconds>(ins_end - ins_start);
-			
-			//if(O->txns == 0){
-			//	std::cout << "0 txns executed" << std::endl;
-			//}
-			
-			//d->tot_ins_wt += O->txns;
-					
-			//d->tot_insert_time += ins_dur.count();
-			//d->tot_insert_count++;
-			break;
-	
-		}
-	
-	}
-	
+	 	      seek(d, O, key, R);
+    		  if(R->leafKey == key){
+			      // key is now present in the tree. Terminate
+			      //auto ins_end = std::chrono::high_resolution_clock::now();
+    			  //auto ins_dur = std::chrono::duration_cast<std::chrono::microseconds>(ins_end - ins_start);
+			      //d->tot_update_time += ins_dur.count();
+			      //d->tot_update_count++;
+			      break;
+		      }
+		      else{
+			      O->windowLoc = combine_position_status_oprecord((node_t *)get_address_from_addresses(R->addresses[0]),TRYING);
+			      O->changer = 1193;
+			     
+			      int res = inject(d, O);
+			      int curStatus = extract_status_from_oprecord(O->windowLoc);
+			      if(curStatus == INJECTED){
+			        execute_operation(d, O);
+			      }
+			      else{
+			        if(curStatus != ABORTED){
+			          std::cout << "Should Be Aborted!" << std::endl;
+			          exit(0);
+			        }
+			        // Get new oprec and seekrec
+			        O = (oprec_t *)get_new_opRecord(d);
+              O->op = map_key_to_delete_operation(key);
+       	      O->pid = d->id;
+              R = (seekrec_t *)get_new_seekRecord(d);
+              O->sr = R;
+			        continue;
+			      }
+			      //auto ins_end = std::chrono::high_resolution_clock::now();
+			      //auto ins_dur = std::chrono::duration_cast<std::chrono::microseconds>(ins_end - ins_start);
+			      //d->tot_insert_time += ins_dur.count();
+			      //d->tot_insert_count++;
+			      break;
+		      }
+	      }
       }
-     // else{
-      		//	auto ins_end1 = std::chrono::high_resolution_clock::now();
-	
-			//auto ins_dur1 = std::chrono::duration_cast<std::chrono::microseconds>(ins_end1 - ins_start);
-		
-			//d->tot_update_time += ins_dur1.count();
-			//d->tot_update_count++;
-      //}
-	
-	  
-     }
-     
-     else
-     {
-    
-        // Delete Operation
-	
-	//std::cout << "Delete" << std::endl;
-	
-	int flag = 0;
-	
-	//auto del_start = std::chrono::high_resolution_clock::now();
-	
-	long leafKey = update_search(d, key);
-       
-       
-       if(leafKey == key){
-       	// execute expensive operation
-       oprec_t * O = (oprec_t *)get_new_opRecord(d);
-    	O->op = map_key_to_delete_operation(key);
- 	O->pid = d->id;
-// 	O->state = combine_position_status_oprecord(d->rootOfTree, INPROGRESS);
- 	//O->seq = d->seqNo++;
- 	
- 	seekrec_t * R = (seekrec_t *)get_new_seekRecord(d);
- 	
- 	//R->dcopies = (dataNode_t *)malloc(3*sizeof(dataNode_t));
- 	/*for(int k = 0; k < 3; k++){
- 		R->dcopies[k] = (dataNode_t *)malloc(sizeof(dataNode_t));	
- 	}*/
- 	
- 	int lastCase = 0;
- 	int iter = 0;
- 	
- 	O->sr = R;
- 	
-	while(true){	
-		
-		
-		
-		iter++;
-		
-		if(iter > 100000){
-			std::cout << "Iterations exceeded12__" << lastCase << "__" << d->case1  << "__" << d->case2 << std::endl;
-			exit(0);
-			
-		}
-		
-		for(int i1 = 0; i1 < 4; i1++){
-			R->addresses[i1] = NULL;
-			R->contents[i1] = 0;
-		}
-		
-		seek(d, O, key,R);
-       	
-       
-       		
-        
-		if(R->leafKey == key){
-	       		flag = 1;
-	       		
-	    
-			
-			
-				// validation successful. Inject operation into the tree at R->addresses[0]
-			
-			// verify that the operation does satisfy the invariant
-			
-			/*for(int i = 2; i >= 0; i--){
-				if(R->addresses[i] != NULL){
-					dataNode_t * rootDNode = (dataNode_t *)extract_dnode_from_ptrnode(R->contents[i]);
-					
-					if(rootDNode->color != RED && R->addresses[i] != d->rootOfTree){
-						std::cout << "Node is not red" << std::endl;
-						exit(0);
-					}
-					else{
-						break;
-					}
-				}
-			}*/
-			
-			O->windowLoc = combine_position_status_oprecord((node_t *)get_address_from_addresses(R->addresses[0]),TRYING);
-			O->changer = 1353;
-			int res = inject(d, O);
-			
-			int curStatus = extract_status_from_oprecord(O->windowLoc);
-			
-			if(curStatus == INJECTED){
-			  execute_operation(d, O);
-			}
-			else{
-			  continue;
-			}
-			
-			/*if(res == 1){
-				// operation successfully injected. Execute sequence of window transactions.
-				//std::cout << "Delete" << std::endl;
-				//auto del_start = std::chrono::high_resolution_clock::now();	
-				//auto del_end2 = std::chrono::high_resolution_clock::now();
-				//auto del_dur2 = std::chrono::duration_cast<std::chrono::microseconds>(del_end2 - del_start);
-				//d->tot_slowdel_time += del_dur2.count();
-				//d->tot_slowdel_count++;
-				 	
-				//auto del_start = std::chrono::high_resolution_clock::now();	 	
-				 	
-				execute_operation(d, O);
-				
-				//auto del_end2 = std::chrono::high_resolution_clock::now();
-				///auto del_dur2 = std::chrono::duration_cast<std::chrono::microseconds>(del_end2 - del_start);
-				///d->tot_slowdel_time += del_dur2.count();
-				//d->tot_slowdel_count++;
-				
-				
-				//blackCount = -1;
-				//check_black_count(d->rootOfTree, 0);	
-			}
-			else if(res == 2){
-				// reuse O and R	
-				lastCase = 2;
-				for(int i1 = 0; i1 < 3; i1++){
-					R->addresses[i1] = NULL;
-					R->contents[i1] = 0;
-				}
-				
-				// injection failed. Restart seek	
-				continue;
-			}
-			else{
-				lastCase = 3;
-				O = (oprec_t *)get_new_opRecord(d);
-				O->op = map_key_to_delete_operation(key);
-				O->pid = d->id;
- 	
- 	
-			 	R = (seekrec_t *)get_new_seekRecord(d);
-			 	//O->seq = d->seqNo++;
- 				O->sr = R;
- 				continue;
-			}	*/
-	
-		
-			
-		
-		}
-	
-		//auto del_end = std::chrono::high_resolution_clock::now();
-		//auto del_dur = std::chrono::duration_cast<std::chrono::microseconds>(del_end - del_start);
-	
-		if(flag == 1){
-			
-			
-			
-			//d->tot_del_wt += O->txns;
-			
-			//d->tot_slowdel_time += del_dur.count();
-			//d->tot_slowdel_count++;	
-			break;
-	
-		}
-	  	
-		else{
-	
-			//d->tot_fastdel_time += del_dur.count();
-			//d->tot_fastdel_count++; 
-			break;	
-		}
-	}
-	
     }
-    
-     
-     
-   }  
-     d->ops++;
-	//blackCount = -1;
-  	// check_black_count((node_t*)get_child(d->prootOfTree->lChild), 0);	
+    else{
+     // Delete Operation
+	   int flag = 0;
+	   //auto del_start = std::chrono::high_resolution_clock::now();
 	
-  }
-	
+	   long leafKey = update_search(d, key);
+     if(leafKey == key){
+       // execute expensive operation
+       oprec_t * O = (oprec_t *)get_new_opRecord(d);
+    	 O->op = map_key_to_delete_operation(key);
+ 	     O->pid = d->id;
+ 	     seekrec_t * R = (seekrec_t *)get_new_seekRecord(d);
+ 	     O->sr = R;
+ 	     int lastCase = 0;
+ 	     int iter = 0;
 
+	     while(true){	
+		     iter++;
+		     if(iter > 100000){
+			     std::cout << "Iterations exceeded12__" << lastCase << "__" << d->case1  << "__" << d->case2 << std::endl;
+			     exit(0);
+		     } 
+		
+		     for(int i1 = 0; i1 < 4; i1++){
+			     R->addresses[i1] = NULL;
+			     R->contents[i1] = 0;
+		     }
+		
+		     seek(d, O, key,R);
+        
+		     if(R->leafKey == key){
+	         flag = 1;
+			
+			     O->windowLoc = combine_position_status_oprecord((node_t *)get_address_from_addresses(R->addresses[0]),TRYING);
+			     O->changer = 1353;
+			     int res = inject(d, O);
+			     int curStatus = extract_status_from_oprecord(O->windowLoc);
+			     if(curStatus == INJECTED){
+			       execute_operation(d, O);
+			     }
+			     else{
+			       if(curStatus != ABORTED){
+			         std::cout << "Should Be Aborted!" << std::endl;
+			         exit(0);
+			       }
+			       // Get new oprec and seekrec
+			       d->case2 = O->changer;
+			       O = (oprec_t *)get_new_opRecord(d);
+             O->op = map_key_to_delete_operation(key);
+     	       O->pid = d->id;
+             R = (seekrec_t *)get_new_seekRecord(d);
+             O->sr = R;
+			       continue;
+			     }
+	  	   } 
+		     //auto del_end = std::chrono::high_resolution_clock::now();
+		     //auto del_dur = std::chrono::duration_cast<std::chrono::microseconds>(del_end - del_start);
+		     if(flag == 1){
+			     //d->tot_del_wt += O->txns;
+			     //d->tot_slowdel_time += del_dur.count();
+			     //d->tot_slowdel_count++;	
+			     break;
+		     }
+		     else{
+			     //d->tot_fastdel_time += del_dur.count();
+			     //d->tot_fastdel_count++; 
+			     break;	
+		     }
+	     }
+     }
+   }  
+   d->ops++;
+  }
   return NULL;
 }
 
@@ -1793,7 +1602,7 @@ pRoot->key = (keyspace1_size + 1);
     data[i].seqNo = 10000;
     data[i].lastAborted = NULL;
     data[i].lastAbortedContents = NULL;
-    
+    data[i].lastAbortMarked = NULL;
  //   data[i].tot_ins_wt = 0;
   //  data[i].tot_del_wt = 0;
     

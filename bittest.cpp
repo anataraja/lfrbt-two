@@ -25,4 +25,10 @@ std::cout << "is_node_owned = " << is_node_owned(word) << std::endl;
 std::cout << "is_node_guardian = " << is_node_guardian(word) << std::endl;
 std::cout << "is_initial_txn = " << is_initial_txn(word) << std::endl;
 std::cout << "Oprec = " << (oprec_t *)extract_oprec_from_opdata(word) << std::endl;
+
+std::cout << "Oprec Status: " << extract_status_from_oprecord(word) << std::endl;
+
+std::cout << "Address from addresses: " << (node_t *)get_address_from_addresses(word) << std::endl;
+
+std::cout << "Child Status: " << get_child_status(word) << std::endl;
 }

@@ -76,6 +76,7 @@ node_t * in_order_traverse(thread_data_t *data, node_t * pNodePtr, int depth, in
 		
 	// mark pNodePtr using SB instruction
 		mark_node(&pNodePtr->opData);
+		pNodePtr->creator=700+depth;
 		pNodePtr->markedRoot = wRoot;
 		//pNodePtr->mop = casField;
 		
@@ -597,8 +598,8 @@ node_t* make_window_copy(thread_data_t * data, node_t * wRootChild, long key, in
 		
 	//std::cout << "mwc0" << std::endl;	
 	// Mark child of Window Root
-	//mark_node(&wRootChild->opData);
-	
+	mark_node(&wRootChild->opData);
+	wRootChild->creator=602;
 	if(key <= wRootChild->key){
 		int state = LEAF;
 		if((node_t *)get_child(wRootChild->lChild) != NULL){
@@ -891,6 +892,7 @@ node_t * in_order_traverse_delete(thread_data_t *data, node_t * pNodePtr, int de
 			
 			
 			mark_node(&pNodePtr->opData);
+			pNodePtr->creator=800+depth;
 			pNodePtr->markedRoot = wRoot;
 		//pNodePtr->mop = 858;
 		AO_t localRootPtr = (pNodePtr->opData); 
@@ -1191,8 +1193,8 @@ node_t* make_delete_window_copy(thread_data_t * data, node_t * wRootChild, long 
 			}
 		
 	
-	//mark_node(&wRootChild->opData);
-	
+	mark_node(&wRootChild->opData);
+	wRootChild->creator=1197;
 	
 	
 if(key <= wRootChild->key){

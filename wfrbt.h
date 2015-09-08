@@ -95,6 +95,7 @@ struct Node
 	AO_t volatile rChild; // address|bit-INTERNAL or LEAF|bit-ONEED or OFIN(default)
 	node_t * move; // move			
 	//uint64_t rootCount;
+	int creator;
 	#ifdef DEBUG
 	int mover;
 	oprec_t * moverop;
@@ -225,7 +226,7 @@ typedef struct thread_data {
 // long samehelpcount;
 	int case1;
 	int case2;
-
+  node_t * lastAbortMarked;
 
 
 } thread_data_t;
@@ -252,7 +253,7 @@ int inject(thread_data_t * data, oprec_t * O);
 /* ################################################################### *
  * Mapping Definitions
  * ################################################################### */
-
+/*
 AO_INLINE int
 AO_compare_double_and_swap_double1(volatile AO_double_t *addr,
                                        AO_t old_val1, AO_t old_val2,
@@ -284,7 +285,7 @@ atomic_load(const volatile AO_double_t *addr)
   
   }
   
-}
+} */
 AO_INLINE AO_t
 AO_load1(const volatile AO_t *addr)
 {
@@ -411,7 +412,7 @@ enum {TRYING,INJECTED,ABORTED};
 // Seek record MACROS
 #define get_which_child_from_addresses(word) (word & 1)
 
-#define get_address_from_addresses(word) ((node_t*)(word >> 1))
+#define get_address_from_addresses(word) (word >> 1)
 
 #define combine_address_which_addresses(addr, which) (((uintptr_t)(addr) << 1) + which)
 
@@ -557,7 +558,7 @@ int atomic_cas_full1(thread_data_t * data, node_t * wRoot, AO_t expVal, AO_t new
 		char title[20] = "file"; 
 		 sprintf(fname,"%s_%d",title,data->id);
 		ofile.open(fname, std::ios::app);*/
-		
+		assert(!is_node_owned(newVal));
 	
 	if(!is_node_marked(expVal)){
 		// node is initially not marked
@@ -565,7 +566,7 @@ int atomic_cas_full1(thread_data_t * data, node_t * wRoot, AO_t expVal, AO_t new
 		if(result1 == 1){
 			// cas success
 			//ofile << data->seqNo << "_1_" << addr << "\n";
-			return result1;
+			return result1+10;
 		}
 		else{
 			//std::cout << "Error. Cas Failure" << std::endl;
@@ -575,17 +576,34 @@ int atomic_cas_full1(thread_data_t * data, node_t * wRoot, AO_t expVal, AO_t new
 			//if(result2 == 1){
 			//	ofile << data->seqNo << "_2_" << addr << "\n";
 			//}
-			return result2;
+			if(result2 == 0){
+			  AO_t old_state = wRoot->opData;
+      if((oprec_t *)extract_oprec_from_opdata(expVal) == (oprec_t *)extract_oprec_from_opdata(old_state) &&
+          is_node_owned(old_state)){
+        std::cout << "Fishy00" << std::endl;    
+        exit(0);
+      }
+			}
+			return result2+100;
 		}	
 	}
 	else{
 		
-		int result3 = atomic_cas_full(&wRoot->opData, expVal, add_mark_flag(newVal));
+		int result3 = atomic_cas_full(&wRoot->opData, expVal, newVal);
+		// newVal should already be marked
+		  assert(is_node_marked(newVal));
 		//if(result3 == 1){
 		// 	ofile << data->seqNo << "_3_" << addr << "\n";
 		//}
-		
-		return result3;
+		if(result3 == 0){
+			  AO_t old_state = wRoot->opData;
+      if((oprec_t *)extract_oprec_from_opdata(expVal) == (oprec_t *)extract_oprec_from_opdata(old_state) &&
+          is_node_owned(old_state)){
+        std::cout << "Fishy01" << std::endl;    
+        exit(0);
+      }
+      }
+		return result3+1000;
 	}
 
 }
