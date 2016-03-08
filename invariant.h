@@ -1,94 +1,90 @@
+#pragma once
+
 /// Determine nodes on cpath and populate seekRecord.
 
+bool check_ins_inv(thread_data_t * data, node_t * pcurrent, AO_t pcurContents, seekrec_t * R, long key) {
 
-bool check_ins_inv(thread_data_t * data, node_t * pcurrent, AO_t pcurContents, seekrec_t * R, long key){
- 	
   node_t * current;
-	bool pwhich = RIGHT; // which from parent to current
-	bool cwhich = RIGHT; // which from current to next
-		
-	if(key <= pcurrent->key){
-	  current = (node_t *)get_child(pcurrent->lChild);
-		pwhich = LEFT;
-	}
-	else{
-		current = (node_t *)get_child(pcurrent->rChild);
-	}
-		
-	if(current == NULL){
-		// pcurrent is a leaf node. Invariant is trivially not satisfied.
-		return false;
-	}
-		
-	AO_t curContents = current->opData;
-		
- 	node_t * next;
- 	node_t * sibling;
- 	if(key <= current->key){
- 		next = (node_t *)get_child(current->lChild);
- 		sibling = (node_t *)get_child(current->rChild);
- 		cwhich = LEFT;
- 	}
- 	else{
- 		next = (node_t *)get_child(current->rChild);
- 		sibling = (node_t *)get_child(current->lChild);
- 		cwhich = RIGHT;
- 	}
- 		
- 	if(next != NULL && sibling != NULL){
- 		
- 		if(is_external_node(next) || is_external_node(sibling)){
-			return false;
-	  }	
- 		
- 		if(current->color == BLACK){
- 			AO_t nextContents = (next->opData);
- 				
-			AO_t siblingContents = (sibling->opData);
-				
-			if(next->color == BLACK){
-				// invariant satisfied
-				R->addresses[0] = combine_address_which_addresses(pcurrent, pwhich);
-				R->contents[0] = pcurContents;
-					
-				R->addresses[1] = combine_address_which_addresses(current, cwhich);
-				R->contents[1] = curContents;
- 					
-				R->addresses[2] = combine_address_which_addresses(next, LEFT);
-				R->contents[2] = nextContents;
-					
-   			R->length = 3;
-					
- 				return true;
- 					 
- 			}
- 			
- 			else if(sibling->color == BLACK){
- 			  // invariant satisfied
- 				R->addresses[0] = combine_address_which_addresses(pcurrent, pwhich);
- 				R->contents[0] = pcurContents;
-					
- 				R->addresses[1] = combine_address_which_addresses(current, !cwhich);
- 				R->contents[1] = curContents;
- 					
- 				R->addresses[2] = combine_address_which_addresses(sibling, LEFT);
- 				R->contents[2] = siblingContents;
-					
-				R->length = 3;
-					
- 				return true;
- 			}
- 			
- 			else{
- 				// both children of current are red. Invariant is not satisfied.
- 				return false;
- 			}
- 		}	
- 	}
- 	else{
- 		// leaf node. Does not satisfy invariant
- 		return false;
- 	}
+  bool pwhich = RIGHT; // which from parent to current
+  bool cwhich = RIGHT; // which from current to next
+
+  if (key < pcurrent->key) {
+    current = (node_t *) get_child(pcurrent->lChild);
+    pwhich = LEFT;
+  } else {
+    current = (node_t *) get_child(pcurrent->rChild);
+  }
+
+  if (current == NULL) {
+    // pcurrent is a leaf node. Invariant is trivially not satisfied.
+    return false;
+  }
+
+  AO_t curContents = current->opData;
+
+  if (is_external_node(current)) {
+    return false;
+  }
+
+  node_t * next;
+  node_t * sibling;
+  if (key < current->key) {
+    next = (node_t *) get_child(current->lChild);
+    sibling = (node_t *) get_child(current->rChild);
+    cwhich = LEFT;
+  } else {
+    next = (node_t *) get_child(current->rChild);
+    sibling = (node_t *) get_child(current->lChild);
+    cwhich = RIGHT;
+  }
+
+  if (is_external_node(next) || is_external_node(sibling)) {
+    return false;
+  }
+
+  if (current->color == BLACK) {
+    AO_t nextContents = (next->opData);
+
+    AO_t siblingContents = (sibling->opData);
+
+    if (next->color == BLACK) {
+      // invariant satisfied
+      R->addresses[0] = combine_address_which_addresses(pcurrent, pwhich);
+      R->contents[0] = pcurContents;
+
+      R->addresses[1] = combine_address_which_addresses(current, cwhich);
+      R->contents[1] = curContents;
+      std::cout << "IPATH__" << pcurrent << "__" << current << std::endl;
+      //R->addresses[2] = combine_address_which_addresses(next, LEFT);
+      //R->contents[2] = nextContents;
+
+      R->length = 2;
+
+      return true;
+
+    }
+
+    else if (sibling->color == BLACK) {
+      // invariant satisfied
+      R->addresses[0] = combine_address_which_addresses(pcurrent, pwhich);
+      R->contents[0] = pcurContents;
+
+      R->addresses[1] = combine_address_which_addresses(current, !cwhich);
+      R->contents[1] = curContents;
+      std::cout << "IPATH__" << pcurrent << "__" << current << std::endl;
+      //R->addresses[2] = combine_address_which_addresses(sibling, LEFT);
+      //R->contents[2] = siblingContents;
+
+      R->length = 2;
+
+      return true;
+    }
+
+    else {
+      // both children of current are red. Invariant is not satisfied.
+      return false;
+    }
+  }
 }
  
 bool check_del_inv(thread_data_t * data, node_t * pcurrent, AO_t pcurContents, seekrec_t * R, long key){
@@ -97,7 +93,7 @@ bool check_del_inv(thread_data_t * data, node_t * pcurrent, AO_t pcurContents, s
 	bool pwhich = RIGHT; // which from parent to current
 	bool cwhich = RIGHT; // which from current to next
 	
-	if(key <= pcurrent->key){
+	if(key < pcurrent->key){
 		current = (node_t *)get_child(pcurrent->lChild);
 		pwhich = LEFT;
 	}
@@ -327,7 +323,7 @@ bool is_invariant_satisfied(thread_data_t * data, node_t * current, AO_t curCont
 bool fastcheck_delete_case_1(thread_data_t * data, long key, node_t * pcurrent, oprec_t * O){
 	
 	node_t * current;
-	if(key <= pcurrent->key){
+	if(key < pcurrent->key){
 		current = (node_t *)get_child(pcurrent->lChild);
 	}
 	else{
@@ -347,7 +343,7 @@ bool fastcheck_delete_case_1(thread_data_t * data, long key, node_t * pcurrent, 
 	node_t * childS = NULL;
 	node_t * cptr = NULL;
 	
-	if(key <= current->key){
+	if(key < current->key){
 		next = (node_t *)get_child(current->lChild);
 		if(next == NULL){
 			return true;
@@ -375,7 +371,7 @@ bool fastcheck_delete_case_1(thread_data_t * data, long key, node_t * pcurrent, 
 	}
 	
 	while(depth < (DELETE_WINDOW_SIZE - 2)){
-		if(key <= next->key){
+		if(key < next->key){
 			child = (node_t *)get_child(next->lChild);
 			
 			if( is_external_node(child)){

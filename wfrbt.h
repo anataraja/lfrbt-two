@@ -1,3 +1,5 @@
+#pragma once
+
 #include <iostream>
 #include <fstream>
 #include <stdint.h>
@@ -7,10 +9,10 @@
 //#include <chrono>
 #include "/home/naravind/research/atomic_ops/include/atomic_ops.h"
 
-#define WINDOW_SIZE 10
+#define WINDOW_SIZE 10+1
 #define MAX_PROCESSES 512
  
-#define DELETE_WINDOW_SIZE 5 
+#define DELETE_WINDOW_SIZE 5+1
 
 #define PTRNODE_RESERVED_BITS 58
 #define DATANODE_RESERVED_BITS 63
@@ -249,43 +251,6 @@ void update_oprecord(thread_data_t * data, oprec_t * O, node_t * current, AO_t c
 int inject(thread_data_t * data, oprec_t * O);
 
 
-// Operation - least significant 2 bits give the operation, remaining bits give the key
-/* ################################################################### *
- * Mapping Definitions
- * ################################################################### */
-/*
-AO_INLINE int
-AO_compare_double_and_swap_double1(volatile AO_double_t *addr,
-                                       AO_t old_val1, AO_t old_val2,
-                                       AO_t new_val1, AO_t new_val2)
-{
-  char result;
-  __asm__ __volatile__("lock; cmpxchg16b %0; setz %1"
-                                : "=m"(*addr), "=q"(result)
-                                        : "m"(*addr),
-                                          "d" (old_val2),
-                                          "a" (old_val1),
-                                          "c" (new_val2),
-                                          "b" (new_val1)  : "memory");
-  return (int) result;
-}
-
-
-AO_INLINE AO_double_t
-atomic_load(const volatile AO_double_t *addr)
-{
-  
-  
-    while(true){
-  const AO_double_t A =  *(const AO_double_t *)addr;
-  const AO_double_t B =  *(const AO_double_t *)addr;
-  	if(A.AO_val1 == B.AO_val1 && A.AO_val2 == B.AO_val2){
-  		return B;
-  	}
-  
-  }
-  
-} */
 AO_INLINE AO_t
 AO_load1(const volatile AO_t *addr)
 {
@@ -566,16 +531,16 @@ int atomic_cas_full1(thread_data_t * data, node_t * wRoot, AO_t expVal, AO_t new
 		if(result1 == 1){
 			// cas success
 			//ofile << data->seqNo << "_1_" << addr << "\n";
-			return result1+10;
+			return result1;
 		}
 		else{
 			//std::cout << "Error. Cas Failure" << std::endl;
 			//exit(0);
 			// node may have been marked in the meantime.
 			int result2 = atomic_cas_full(&wRoot->opData, add_mark_flag(expVal), add_mark_flag(newVal));
-			//if(result2 == 1){
-			//	ofile << data->seqNo << "_2_" << addr << "\n";
-			//}
+			if(result2 == 1){
+				wRoot->creator = 5777;
+			}
 			if(result2 == 0){
 			  AO_t old_state = wRoot->opData;
       if((oprec_t *)extract_oprec_from_opdata(expVal) == (oprec_t *)extract_oprec_from_opdata(old_state) &&
@@ -584,7 +549,7 @@ int atomic_cas_full1(thread_data_t * data, node_t * wRoot, AO_t expVal, AO_t new
         exit(0);
       }
 			}
-			return result2+100;
+			return result2;
 		}	
 	}
 	else{
@@ -592,9 +557,9 @@ int atomic_cas_full1(thread_data_t * data, node_t * wRoot, AO_t expVal, AO_t new
 		int result3 = atomic_cas_full(&wRoot->opData, expVal, newVal);
 		// newVal should already be marked
 		  assert(is_node_marked(newVal));
-		//if(result3 == 1){
-		// 	ofile << data->seqNo << "_3_" << addr << "\n";
-		//}
+		if(result3 == 1){
+		  wRoot->creator = 5966;
+		}
 		if(result3 == 0){
 			  AO_t old_state = wRoot->opData;
       if((oprec_t *)extract_oprec_from_opdata(expVal) == (oprec_t *)extract_oprec_from_opdata(old_state) &&
@@ -603,7 +568,7 @@ int atomic_cas_full1(thread_data_t * data, node_t * wRoot, AO_t expVal, AO_t new
         exit(0);
       }
       }
-		return result3+1000;
+		return result3;
 	}
 
 }

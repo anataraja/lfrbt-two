@@ -4,7 +4,7 @@ node_t * check_delete_case_2(thread_data_t * data, node_t * wRootChildCopy, long
 	node_t * curNode = wRootChildCopy;
 
 	node_t * nextNode = NULL;
-	if(key <= curNode->key){
+	if(key < curNode->key){
 		nextNode = (node_t *)get_child(curNode->lChild);
 	}
 	else{
@@ -168,7 +168,7 @@ node_t * check_delete_case_2(thread_data_t * data, node_t * wRootChildCopy, long
 				}
 			}
 			depth++;
-			if(key <= nextNode->key){
+			if(key < nextNode->key){
 				nextNode = (node_t *)get_child(nextNode->lChild);
 			}
 			else{
@@ -1439,7 +1439,7 @@ bool check_delete_case_1(thread_data_t * data, node_t * wRoot, node_t * wRootChi
 	//Word nextWord;
 	
 	
-	if(key <= wRootChildCopy->key){
+	if(key < wRootChildCopy->key){
 		nextNode = (node_t *)get_child(wRootChildCopy->lChild);
 		//nextDataNode = (dataNode_t *)extract_dnode_from_ptrnode(*(nextPtrNode));
 		nextSNode = (node_t *)get_child(wRootChildCopy->rChild);
@@ -1560,7 +1560,7 @@ bool check_delete_case_1(thread_data_t * data, node_t * wRoot, node_t * wRootChi
 	
 	while(depth < (DELETE_WINDOW_SIZE - 2)){
 		
-		if(key <= nextNode->key){
+		if(key < nextNode->key){
 			childNode = (node_t *)get_child(nextNode->lChild);
 			//childDataNode = (dataNode_t *)extract_dnode_from_ptrnode(*(childPtrNode));
 			if( is_external_node(childNode)){
@@ -1856,7 +1856,7 @@ node_t * handle_delete_case_3(thread_data_t * data,  node_t * wRoot, node_t * wR
 	node_t * curNode = NULL;
 	//node_t * curDataNode = NULL;
 
-	if(key <= wRootChildCopy->key){
+	if(key < wRootChildCopy->key){
 		curNode = (node_t *)get_child(wRootChildCopy->lChild);
 	}
 	else{
@@ -1871,7 +1871,7 @@ node_t * handle_delete_case_3(thread_data_t * data,  node_t * wRoot, node_t * wR
 	node_t * childSNode = NULL;
 	//dataNode_t * childSDataNode = NULL;
 
-	if(key <= curNode->key){
+	if(key < curNode->key){
 		childNode = (node_t *)get_child(curNode->lChild);
 		childSNode = (node_t *)get_child(curNode->rChild);
 	}
@@ -1889,7 +1889,7 @@ node_t * handle_delete_case_3(thread_data_t * data,  node_t * wRoot, node_t * wR
 	node_t * gchildSNode = NULL;
 	//dataNode_t * gchildSDataNode = NULL;
 
-	if(key <= childNode->key){
+	if(key < childNode->key){
 		gchildNode = (node_t *)get_child(childNode->lChild);
 		gchildSNode = (node_t *)get_child(childNode->rChild);
 	}

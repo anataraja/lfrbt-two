@@ -13,6 +13,7 @@
 #include <iostream>
 #include <iomanip>
 #include <string.h>
+#include "wfrbt.h"
 #include "insertion.h"
 #include "deletion.h"
 #include "read.h" 
@@ -39,11 +40,11 @@
 
 #define DEFAULT_DURATION                1000
 #define DEFAULT_TABLE_SIZE              10
-#define DEFAULT_NB_THREADS              2
+#define DEFAULT_NB_THREADS              1
 #define DEFAULT_SEED                    0
-#define DEFAULT_SEARCH_FRAC             0.0
-#define DEFAULT_INSERT_FRAC             0.5
-#define DEFAULT_DELETE_FRAC             0.5
+#define DEFAULT_SEARCH_FRAC             1.0
+#define DEFAULT_INSERT_FRAC             0.0
+#define DEFAULT_DELETE_FRAC             0.0
 #define DEFAULT_READER_THREADS         	0
 #define DEFAULT_KEYSPACE1_SIZE          100
 #define DEFAULT_KEYSPACE2_SIZE          1000000000
@@ -66,11 +67,8 @@ static volatile AO_t stop;
 
 long total_insert = 0;
 
-
-
 timespec t;
 /* STRUCTURES */
-
 
 enum{
 Front,
@@ -96,13 +94,10 @@ void check_black_count(node_t * root, int count){
 	}
 	
 	
-        if(root->color == BLACK ){
+  if (root->color == BLACK) {
 
-            count++;
-        }
-	
-	
-	
+    count++;
+  }
 	node_t * lChild = (node_t *)get_child(root->lChild);
 	node_t * rChild = (node_t *)get_child(root->rChild);
 	
@@ -112,44 +107,46 @@ void check_black_count(node_t * root, int count){
 	}
 	
 	
-        if(lChild != NULL){
+  if (lChild != NULL) {
 
-            check_black_count(lChild, count);
-        }
+    check_black_count(lChild, count);
+  }
 
-        
-        if(rChild != NULL){
-            check_black_count(rChild, count);
-        }
-        
+  if (rChild != NULL) {
+    check_black_count(rChild, count);
+  }
 
+  if (lChild == NULL && rChild == NULL) {
+    std::cout << " LeafNode Encountered!" << std::endl;
+    if (root->key != -1) {
+      leafNodes++;
+      std::cout << " Actual LeafNode! Key = " << root->key << std::endl;
+    } else {
+      std::cout << " Empty LeafNode!" << std::endl;
+    }
+    if (blackCount == -1) {
+      blackCount = count;
 
-        if(lChild == NULL && rChild == NULL){
-            if(root->key != -1){
-            	leafNodes++;
-            }
-            if(blackCount == -1){
-                blackCount = count;
+    } else if (blackCount != count) {
+      std::cout << "Black Counts do not match!!!__" << blackCount << "__" << count << std::endl;
+      exit(0);
+    }
 
-            }
-            else if(blackCount != count){
-            	 std::cout << "Black Counts do not match!!!__" << blackCount << "__"<< count << std::endl;
-            	 exit(0);
-            }
-        
-        }
+  }
         
 }
-
 
 void check_red_property(node_t * root){
 	// 1. To check that no red node has a red child
 	
 	node_t * lChild = (node_t *)get_child(root->lChild);
 	if(lChild != NULL){
-	
+	  AO_t state = lChild->opData;
+	  if(is_node_marked(state)){
+	    std::cout << "Error. Active node is marked" << std::endl;
+	  }
 		if((root->color == RED) && (lChild->color == RED)){
-			std::cout << "ERROR!!! DOUBLE RED CONDITION EXISTS IN THE TREE!!";
+			std::cout << "ERROR!!! DOUBLE RED CONDITION EXISTS IN THE TREE!!"  << std::endl;
 			exit(0);
 		}
 		check_red_property(lChild); 
@@ -157,10 +154,13 @@ void check_red_property(node_t * root){
 	
 	node_t * rChild = (node_t *)get_child(root->rChild);
 	if(rChild != NULL){
-		
+		AO_t state = rChild->opData;
+	  if(is_node_marked(state)){
+	    std::cout << "Error. Active node is marked" << std::endl;
+	  }
 	
 		if((root->color == RED) && (rChild->color == RED)){
-			std::cout << "ERROR!!! DOUBLE RED CONDITION EXISTS IN THE TREE!!";
+			std::cout << "ERROR!!! DOUBLE RED CONDITION EXISTS IN THE TREE!!" << std::endl;
 			exit(0);
 		}
 		check_red_property(rChild); 
@@ -174,10 +174,10 @@ long in_order_visit(node_t * root){
 	if((node_t *)get_child(root->lChild) != NULL){
 	
 		long lKey = in_order_visit((node_t *)get_child(root->lChild));
-		if(lKey > root->key){
+		if(lKey >= root->key){
 			std::cout << "Lkey is larger!!__" << lKey << "__ " << root->key << std::endl;
 			std::cout << "Sanity Check Failed!!" << std::endl;
-			
+			exit(0);
 		}
 	}
 	
@@ -185,27 +185,24 @@ long in_order_visit(node_t * root){
 	if((node_t *)get_child(root->rChild) != NULL){
 	
 		long rKey = in_order_visit((node_t *)get_child(root->rChild));
-		if(rKey <= root->key){
+		if(rKey < root->key){
 			std::cout << "Rkey is smaller!!__" << rKey << "__ " << root->key <<  std::endl;
 			std::cout << "Sanity Check Failed!!" << std::endl;
+			exit(0);
 		}
 	}
 	return (root->key);
 }
-
-
-
-
 
 /************************************************************************************************/
 
 /************************************************************************************************/
 
 node_t * perform_external_node_replacement(thread_data_t * data, int pid, node_t * curParent, long key){
-        //std::cout << "Here" << std::endl;	
+        std::cout << "Here" << std::endl;	
 	// curParent is parent of an external node.
 	node_t * curLeaf = NULL;
-	if(key <= curParent->key){
+	if(key < curParent->key){
 		curLeaf = (node_t *)get_child(curParent->lChild);
 	}
 	else{
@@ -216,6 +213,10 @@ node_t * perform_external_node_replacement(thread_data_t * data, int pid, node_t
 	if(key == curKey){
 		return NULL;
 	}
+	else if(curKey == -1){
+	  curLeaf->key = key;
+	  return curLeaf;
+	}
 	
 	
 	node_t * newInt = (node_t *)get_new_node(data);
@@ -224,13 +225,13 @@ node_t * perform_external_node_replacement(thread_data_t * data, int pid, node_t
   newLeaf->color = BLACK;
 	newLeaf->key = key;
 				
-	if(key <= curKey){
-	  newInt->key = key;
+	if(key < curKey){
+	  newInt->key = curKey;
 		newInt->lChild = create_child_word(newLeaf,OFIN);
 		newInt->rChild = create_child_word(curLeaf,OFIN);
 	}
 	else{
-	  newInt->key = curKey;
+	  newInt->key = key;
 		newInt->rChild = create_child_word(newLeaf,OFIN);
 		newInt->lChild = create_child_word(curLeaf,OFIN);
 	}
@@ -242,28 +243,44 @@ node_t * perform_external_node_replacement(thread_data_t * data, int pid, node_t
 }
 
 
-
 node_t * insert(thread_data_t * data, int pid, long key, node_t * wRoot, node_t * wRootChild, AO_t casField, oprec_t * O){
+  // wRoot is Guardian node. wRootChild is Anchor node.
+  // Create a copy of the anchor node.
+  AO_t pRootContents = wRootChild->opData;
+  AO_t childWord;
+  int which_child_of_anchor_node = extract_child_from_opdata(pRootContents);
+
   node_t * bot = (node_t *)map_word_to_bot_address(1);
-  int currentWindowSize = 3;
+  int currentWindowSize = 4;
   bool case2flag = false;
- 	currentWindowSize = 3;
  	//std::cout << "11" << std::endl;
- 	node_t * wRootChildCopy = make_window_copy(data, wRootChild, key, currentWindowSize,  wRoot, casField, O);
+ 	node_t * anchor = make_window_copy(data, wRootChild, key, currentWindowSize,  wRoot, casField, O);
   //std::cout << "13" << std::endl;
-  if(wRootChildCopy == (node_t *)map_word_to_bot_address(1)){
+  if(anchor == (node_t *)map_word_to_bot_address(1)){
   	return (bot);
   }
-  	
-#ifdef DEBUG
-  if(wRootChildCopy == O->sr->addresses[1]){	
-    std::cout << "Error copying insert window" << std::endl;
-  	exit(0);	
+  if(anchor->parent != NULL){
+    std::cout << " Anchor's parent is not NULL" << std::endl;
+    exit(0);
   }
-#endif
+  node_t* wRootChildCopy = NULL;
+  if(which_child_of_anchor_node == LEFT){
+    wRootChildCopy = (node_t *)get_child(anchor->lChild);
+  }
+  else{
+    wRootChildCopy = (node_t *)get_child(anchor->rChild);
+  }
   
+  if (wRootChildCopy->parent != NULL) {
+    std::cout << " wRootChildCopy's parent is not NULL__" << anchor << "__" << wRootChildCopy->parent << std::endl;
+    exit(0);
+  }
+
   node_t * lastNode = set_last_node(data, wRootChildCopy, currentWindowSize, key);
+  std::cout << "LastNode1 = " << lastNode << std::endl;
   while(data->madeDecision == false){	
+    check_current_window(data, key, anchor, currentWindowSize);
+
 		if(wRoot == data->prootOfTree){
 		  if(wRootChildCopy->color == RED){
 			  wRootChildCopy->color = BLACK;
@@ -290,10 +307,10 @@ node_t * insert(thread_data_t * data, int pid, long key, node_t * wRoot, node_t 
   		int child = extract_child_from_opdata(casField);
   		int result0;
   		if(child == LEFT){
-			  result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(wRootChildCopy,ONEED));
+			  result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		  }
 		  else{
-			  result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(wRootChildCopy,ONEED));
+			  result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		  }
 		
 		  //int result1 = atomic_cas_full1(data, wRoot, casField, combine_oprec_status_child_opdata(O, DONE, child));
@@ -313,21 +330,20 @@ node_t * insert(thread_data_t * data, int pid, long key, node_t * wRoot, node_t 
 	  }
 	
 	  // tree is not empty
-	  if((is_external_node(wRootChildCopy))){
+	  if((is_external_node(wRootChildCopy)) && wRoot == data->prootOfTree){
 			
 			long curKey = wRootChildCopy->key;
 			if(curKey == key){
-			 	wRootChildCopy->move = NULL;
+			 	anchor->move = NULL;
 			  int child = extract_child_from_opdata(casField);
 		    int result0;
 		    if(child == LEFT){
-			    result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(wRootChildCopy,ONEED));
+			    result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		    }
 		    else{
-			    result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(wRootChildCopy,ONEED));
+			    result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		    }
 		
-		    //int result1 = atomic_cas_full1(data, wRoot, casField, combine_oprec_status_child_opdata(O, DONE, child));
 				if(result0 == 1){	
 					return(NULL);
 				} 
@@ -337,17 +353,18 @@ node_t * insert(thread_data_t * data, int pid, long key, node_t * wRoot, node_t 
 				}
 			}
 			else{
+			  std::cout << "Yo" << std::endl;
 				node_t * newLeaf = (node_t *)get_new_node(data);
 				newLeaf->key = key;
 				node_t * newInt = (node_t *)get_new_node(data);
 				long curKey = wRootChildCopy->key;
-				if(key <= curKey){
-					newInt->key = key;
+				if(key < curKey){
+					newInt->key = curKey;
 					newInt->lChild = create_child_word(newLeaf,OFIN);
 					newInt->rChild = create_child_word(wRootChildCopy,OFIN);
 				}
 				else{
-					newInt->key = curKey;
+					newInt->key = key;
 					newInt->rChild = create_child_word(newLeaf,OFIN);
 					newInt->lChild = create_child_word(wRootChildCopy,OFIN);
 					
@@ -355,16 +372,23 @@ node_t * insert(thread_data_t * data, int pid, long key, node_t * wRoot, node_t 
 				data->hasInserted = key;
 			 	newInt->move = NULL;
 			 	newInt->color = RED;
+
+			 	if(which_child_of_anchor_node == LEFT){
+			 	  anchor->lChild = create_child_word(newInt, OFIN);
+			 	}
+			 	else{
+			 	  anchor->rChild = create_child_word(newInt, OFIN);
+			 	}
+
 		    int child = extract_child_from_opdata(casField);
 		    int result0;
 		    if(child == LEFT){
-			    result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(newInt,ONEED));
+			    result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		    }
 		    else{
-			    result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(newInt,ONEED));
+			    result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		    }
 		
-		    //int result1 = atomic_cas_full1(data, wRoot, casField, combine_oprec_status_child_opdata(O, DONE, child));
 				if(result0 == 1){
 				  if(data->hasInserted != 0){
 						data->numInsert++;
@@ -381,14 +405,15 @@ node_t * insert(thread_data_t * data, int pid, long key, node_t * wRoot, node_t 
 
 	  /// case 3: Multiple nodes exist in the tree.	
 	  // Here we need to find out which one of the insertion cases are satisfied
-	  node_t * nextWRoot = get_next_node_on_access_path(data, pid, wRoot, wRootChild, wRootChildCopy, key, currentWindowSize, casField, case2flag,O);
+	  node_t * nextWRoot = get_next_node_on_access_path(data, pid, wRoot, wRootChild, anchor, wRootChildCopy, key, currentWindowSize, casField, case2flag,O);
 	  if(nextWRoot == NULL && data->madeDecision == false){
 		  currentWindowSize++;
     	lastNode = extend_current_window(data, lastNode, key, currentWindowSize, wRoot, casField,O);
+    	std::cout << "LastNode2 = " << lastNode << std::endl;
   	  if(lastNode == bot){
   	    return (bot);
     	}
-    	std::cout << "12" << std::endl;
+    	std::cout << "Extending window" << std::endl;
   	  continue;
 	  }
 
@@ -397,39 +422,40 @@ node_t * insert(thread_data_t * data, int pid, long key, node_t * wRoot, node_t 
 	  	// need to insert node and rebalance 
 	  	node_t * dnode = perform_external_node_replacement( data, pid, nextWRoot, key);
       if(dnode != NULL){
-		    if(key <= nextWRoot->key){
+		    if(key < nextWRoot->key){
 		    	nextWRoot->lChild = create_child_word(dnode, OFIN);
 	    	}
 		    else{
 			    nextWRoot->rChild = create_child_word(dnode, OFIN);
 		    }	
 		    dnode->color = RED;
-        if(nextWRoot == wRootChildCopy){
-          dnode->parent = NULL;
-        }
+        //if(nextWRoot == wRootChildCopy){
+        //  dnode->parent = NULL;
+        //}
       
 		    node_t * finalRootNode = balance_after_insertion(data, dnode, wRootChildCopy);
 		
 		    // INSERTING HERE
 		    if(finalRootNode != NULL){
-			    finalRootNode->move = NULL;
+		      if(which_child_of_anchor_node ==  LEFT){
+		        anchor->lChild = create_child_word(finalRootNode, OFIN);
+		      }
+		      else{
+		        anchor->rChild = create_child_word(finalRootNode, OFIN);
+		      }
+
+
+			    anchor->move = NULL;
 		      int child = extract_child_from_opdata(casField);
 		      int result0;
 		      if(child == LEFT){
-			       result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(finalRootNode,ONEED));
+			       result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		      }
 		      else{
-			     result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(finalRootNode,ONEED));
+			     result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		      }
 		    
-		      //int result1 = atomic_cas_full1(data, wRoot, casField, combine_oprec_status_child_opdata(O, DONE, child));
 				
-				  AO_t lchildWord = wRoot->lChild;
-				  AO_t rchildWord = wRoot->rChild;
-				 // if((node_t *)get_child(lchildWord) == O->sr->addresses[1] || (node_t *)get_child(rchildWord) == O->sr->addresses[1]){
-					//  std::cout << "Error..614" << std::endl;
-				 // }
-
 				  if(result0 == 1){	
 					  if(data->hasInserted != 0){
 					  	data->numInsert++;
@@ -442,19 +468,24 @@ node_t * insert(thread_data_t * data, int pid, long key, node_t * wRoot, node_t 
 				  	return NULL;
 			  	}				
 		    }
-		    else{
-			    dnode->move = NULL;
+		    else {
+		      std::cout << "Fishy__" << std::endl;
+          if (which_child_of_anchor_node == LEFT) {
+            anchor->lChild = create_child_word(dnode, OFIN);
+          } else {
+            anchor->rChild = create_child_word(dnode, OFIN);
+          }
+
+			    anchor->move = NULL;
 	      	int child = extract_child_from_opdata(casField);
 		      int result0;
 		      if(child == LEFT){
-			      result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(dnode,ONEED));
+			      result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		      }
 		      else{
-			      result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(dnode,ONEED));
+			      result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		      }
     		
-    		  //int result1 = atomic_cas_full1(data, wRoot, casField, combine_oprec_status_child_opdata(O, DONE, child));
-				  
 				  if(result0 == 1){						
 					  // cas success
 					  if(data->hasInserted != 0){
@@ -471,14 +502,14 @@ node_t * insert(thread_data_t * data, int pid, long key, node_t * wRoot, node_t 
 			  return NULL;	
 		  }
 		
-		  wRootChildCopy->move = NULL;
+		  anchor->move = NULL;
 	  	int child = extract_child_from_opdata(casField);
 		  int result0;
 	  	if(child == LEFT){
-			  result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(wRootChildCopy,ONEED));
+			  result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		  }
 		  else{
-			  result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(wRootChildCopy,ONEED));
+			  result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 	  	}
 		
 		  //int result1 = atomic_cas_full1(data, wRoot, casField, combine_oprec_status_child_opdata(O, DONE, child));
@@ -499,7 +530,8 @@ node_t * insert(thread_data_t * data, int pid, long key, node_t * wRoot, node_t 
 /*************************************************************************************************/
 
 int perform_one_window_operation(thread_data_t* data, node_t* pRoot, oprec_t * O, int sucid){
-
+  std::cout << "Performing a window" << std::endl;
+  // pRoot is guardian node here.
   AO_t pRootContents = pRoot->opData;
   AO_t childWord;
   int temp;
@@ -521,7 +553,8 @@ int perform_one_window_operation(thread_data_t* data, node_t* pRoot, oprec_t * O
 	    data->helpCount = 0;
 	    long key = map_word_to_key(O->op);
 
-  	  unsigned opn = map_word_to_operation(O->op);	
+  	  unsigned opn = map_word_to_operation(O->op);
+  	  // pRootChild is anchor node
 	    node_t * pRootChild = (node_t *)get_child(childWord);
   	  AO_t pRootContents1 = pRoot->opData;
 	    AO_t pRootContents0 = add_mark_flag(pRootContents);
@@ -583,183 +616,6 @@ int perform_one_window_operation(thread_data_t* data, node_t* pRoot, oprec_t * O
  * Protocol Definitions
  * ################################################################### */
 
-/* 
- void upgrade_announcement(thread_data_t * data, oprec_t * O){
- 	seekrec_t * R = O->sr;
- 	
- 	AO_t E = combine_oprec_status_child_opdata(O,ANNOUNCE,R->isLeft);
- 	AO_t G = combine_oprec_status_child_opdata(O,PLOCK,R->isLeft);
- 	
- 	int result = atomic_cas_full(&R->addresses[0]->opData,E,G);
- 	if(result != 1){
- 		// node may have been marked.
- 		AO_t E1 = combine_oprec_status_child_mark_opdata(O,ANNOUNCE,R->isLeft);
- 		AO_t G1 = combine_oprec_status_child_mark_opdata(O,PLOCK,R->isLeft);
- 		
- 		int result2 = atomic_cas_full(&R->addresses[0]->opData,E1,G1);
- 	}
- }
- 
- 
-void release_announcement(thread_data_t * data, oprec_t * O){
-
-	seekrec_t * R = O->sr;	
-	
- 	AO_t E = combine_oprec_status_child_opdata(O,ANNOUNCE,R->isLeft);
- 	AO_t H = combine_oprec_status_child_opdata(O,ABORT,R->isLeft);
- 	
- 	int result = atomic_cas_full(&R->addresses[0]->opData,E,H);
- 	if(result != 1){
- 		// node may have been marked.
- 		AO_t E1 = combine_oprec_status_child_mark_opdata(O,ANNOUNCE,R->isLeft);
- 		AO_t H1 = combine_oprec_status_child_mark_opdata(O,ABORT,R->isLeft);
- 		
- 		int result2 = atomic_cas_full(&R->addresses[0]->opData,E1,H1);
- 		if(result2 == 1){
- 			data->lastCase2 = 938;
- 		}
- 		else{
- 			data->lastCase2 = 941;
- 		}
- 		
- 	}
- 	else{
- 		data->lastCase2 = 946;
- 	}
-}
- 
- bool lock_invariant_path(thread_data_t * data, oprec_t * O){
- 	
- 	seekrec_t * R = O->sr;
- 	// obtain first secondary lock
- 	AO_t newWord1 = combine_oprec_status_child_opdata(O,SLOCK,LEFT); // default is left
-	AO_t newWord2;
-		int st = extract_status_from_opdata(R->contents[1]);	
-	int result1 = atomic_cas_full(&R->addresses[1]->opData, R->contents[1], newWord1);
-	if(result1 != 1){
-		// CAS failure. Determine if node has already been locked on behalf of the same operation.
-		AO_t W1 = (R->addresses[1]->opData);
-		if((oprec_t *)extract_oprec_from_opdata(W1) != O){
-			// different operation	
-			data->lastCase1 = 953;
-			return false;
-		}
-		else{
-			if(extract_status_from_opdata(W1) == ABORT){
-				// operation aborted.
-				data->lastCase1 = 960;
-				return false;
-			}
-		}
-	}
-	// acquire any remaining secondary lock
-	
-	if(R->addresses[2] != NULL){
-		newWord2 = combine_oprec_status_child_opdata(O,SLOCK,LEFT);
-		st = extract_status_from_opdata(R->contents[2]);	
-		int result1 = atomic_cas_full(&R->addresses[2]->opData, R->contents[2], newWord2);
-		//R->addresses[2]->slocker = 1100+st;
-		if(result1 != 1){
-			// CAS failure. Determine if node has already been locked on behalf of the same operation.
-			AO_t W1 = (R->addresses[2]->opData);
-			if((oprec_t *)extract_oprec_from_opdata(W1) != O){
-				// different operation. Release acquired secondary lock	
-				AO_t newWord1Abort = combine_oprec_status_child_opdata(O,ABORT,LEFT);
-				atomic_cas_full(&R->addresses[1]->opData, newWord1, newWord1Abort);
-				data->lastCase1 = 981;
-				return false;
-			}
-		}
-	}
-	
-	if(R->addresses[3] != NULL){
-		AO_t newWord3 = combine_oprec_status_child_opdata(O,SLOCK,LEFT);
-		st = extract_status_from_opdata(R->contents[3]);	
-		int result1 = atomic_cas_full(&R->addresses[3]->opData, R->contents[3], newWord3);
-		//R->addresses[3]->slocker = 1200+st;
-		if(result1 != 1){
-			// CAS failure. Determine if node has already been locked on behalf of the same operation.
-			AO_t W1 = (R->addresses[3]->opData);
-			if((oprec_t *)extract_oprec_from_opdata(W1) != O){
-				// different operation. Release acquired secondary lock	
-				AO_t newWord2Abort = combine_oprec_status_child_opdata(O,ABORT,LEFT);
-				atomic_cas_full(&R->addresses[2]->opData, newWord2, newWord2Abort);
-				
-				atomic_cas_full(&R->addresses[1]->opData, newWord1, newWord2Abort);
-				
-				data->lastCase1 = 981;
-				return false;
-			}
-		}
-	}
- 		
- 	return true;
- }
- 
- 
-bool validate(thread_data_t * data, oprec_t * O){
-	
-	seekrec_t * R = O->sr;
-	
-	// first check if any nodes are owned.
-	
-	for(int i = 3; i >= 0; i--){
-		//data->lastCase = 0;
-		if(R->contents[i] != NULL){
-				unsigned status = extract_status_from_opdata(R->contents[i]);
-			if((status == ANNOUNCE) || (status == PLOCK) || (status == SLOCK)){
-				//dataNode_t * dnode = (dataNode_t *)extract_dnode_from_ptrnode(R->contents[i]);
-				oprec_t * N = (oprec_t *)extract_oprec_from_opdata(R->contents[i]);
-				int help = help_during_validation(data, N , R->addresses[i], R->contents[i],1148);
-				data->case1++;
-				return false;
-			}
-		}
-	}
-	
-	// next check if any nodes are marked.
-	
-	for(int i = 3; i >= 0; i--){
-		if(is_node_marked(R->contents[i])){
-			node_t * marker = R->addresses[i]->markedRoot;
-			if(marker != NULL){
-				
-				//data->lasthelp = help+10000;
-				//data->lastCase = 2;
-				AO_t state = marker->opData;
-				oprec_t * N = (oprec_t *)extract_oprec_from_opdata(state);
-				unsigned status = extract_status_from_opdata(state);
-				if(status == PLOCK){
-					int help = help_during_validation(data, N, marker, state, 1155);
-					data->lasthelp = help;
-				}
-			}
-			//else{
-				data->case2++;
-			//}
-			return false;	
-		}
-	}
-	
-	// Finally, check if any node has a DONE status, and update position of operation
-	
-	for(int i = 3; i >= 0; i--){
-		if(R->contents[i] != NULL){
-			unsigned status = extract_status_from_opdata(R->contents[i]);
-			if((status == DONE)){
-				//dataNode_t * dnode = (dataNode_t *)extract_dnode_from_ptrnode(R->contents[i]);
-				oprec_t * N = (oprec_t *)extract_oprec_from_opdata(R->contents[i]);
-				
-				//help_within_window(data, N, R->addresses[i], R->contents[i],1199);
-				update_oprecord(data, N, R->addresses[i], R->contents[i],1213);
-				
-				
-			}
-		}
-	}
-	return true;
-}
-*/
 
 void abort(thread_data_t * data, oprec_t * O){
   AO_t curWord = O->windowLoc;
@@ -854,24 +710,14 @@ int inject(thread_data_t * data, oprec_t * O){
 	  oprec_t * N = (oprec_t *)extract_oprec_from_opdata(state);
 	  if(N != O){
 	    /// do not own node yet
-	    if((child != next) || (is_node_marked(state))){
+	    if((child != next) || is_node_marked(state)){
 	      /// the link from the current to next does not exist, or current has been marked for removal
 	      O->windowLoc = combine_position_status_oprecord(NULL, ABORTED);
 	      if(data->id != O->pid)
 	        O->changer = 842;
-	      else{
-	        if(is_node_marked(state)){
-	          if(data->lastAbortMarked == current){
-	            std::cout << "Active Marked Node?" << std::endl;
-	            exit(0);
-	          }
-	          else{
-	            data->lastAbortMarked = current;
-	          } 
-	        }   
-	      }
 	      break;
 	    }
+	    
 	    if(is_node_owned(state)){
 	      /// help the conflicting operation move out of the way
 	      help(data, N, current, state, 1282);
@@ -1134,10 +980,10 @@ void *testRW(void *data){
  	
 	      while(true){
 		      iter++;
-		      if(iter > 100000){
+		      /*if(iter > 100000){
 			      std::cout << "Iterations exceeded11__" << lastCase << "__" << d->case1  << "__" << d->case2 << std::endl;
 			      exit(0);
-		      }
+		      }*/
 		
 		      for(int i1 = 0; i1 < 4; i1++){
 			      R->addresses[i1] = NULL;
@@ -1161,6 +1007,13 @@ void *testRW(void *data){
 			      int curStatus = extract_status_from_oprecord(O->windowLoc);
 			      if(curStatus == INJECTED){
 			        execute_operation(d, O);
+			        leafNodes = 0;
+			        AO_t lcword = d->prootOfTree->lChild;
+			        node_t * pRootLC = (node_t *)get_child(lcword);
+    	 	check_red_property((node_t*)get_child(pRootLC->lChild));
+        blackCount = -1;
+        check_black_count((node_t*)get_child(pRootLC->lChild), 0);
+        long rootkey =  in_order_visit((node_t*)get_child(pRootLC->lChild));
 			      }
 			      else{
 			        if(curStatus != ABORTED){
@@ -1202,10 +1055,10 @@ void *testRW(void *data){
 
 	     while(true){	
 		     iter++;
-		     if(iter > 100000){
+		     /*if(iter > 100000){
 			     std::cout << "Iterations exceeded12__" << lastCase << "__" << d->case1  << "__" << d->case2 << std::endl;
 			     exit(0);
-		     } 
+		     } */
 		
 		     for(int i1 = 0; i1 < 4; i1++){
 			     R->addresses[i1] = NULL;
@@ -1447,27 +1300,54 @@ int main(int argc, char **argv)
 
  
  node_t * pRoot = (node_t *)malloc(sizeof(node_t));
- 
+ node_t * pRootRC = (node_t *)malloc(sizeof(node_t));
+ node_t * pRootLC = (node_t *)malloc(sizeof(node_t));
+ node_t * pRootLCLeaf = (node_t *)malloc(sizeof(node_t));
  node_t * newNode = (node_t *)malloc(sizeof(node_t));
 
-pRoot->key = (keyspace1_size + 1);	 
+ pRoot->key = (keyspace1_size + 2);	 
  pRoot->color = BLACK;
  pRoot->opData = combine_oprec_status_child_opdata(NULL, NOT_OWNED, LEFT, NOT_INITIAL, NOT_GUARDIAN);
  pRoot->parent = NULL;
- pRoot->lChild = create_child_word(newNode,OFIN);
- pRoot->rChild = NULL;
+ pRoot->lChild = create_child_word(pRootLC,OFIN);
+ pRoot->rChild = create_child_word(pRootRC,OFIN);
  pRoot->move = NULL;
+
+ pRootRC->key = (keyspace1_size + 2);	 
+ pRootRC->color = BLACK;
+ pRootRC->opData = combine_oprec_status_child_opdata(NULL, NOT_OWNED, LEFT, NOT_INITIAL, NOT_GUARDIAN);
+ pRootRC->parent = NULL;
+ pRootRC->lChild = create_child_word(NULL,OFIN);
+ pRootRC->rChild = create_child_word(NULL,OFIN);
+ pRootRC->move = NULL;
+
+ pRootLC->key = (keyspace1_size + 1);	 
+ pRootLC->color = BLACK;
+ pRootLC->opData = combine_oprec_status_child_opdata(NULL, NOT_OWNED, LEFT, NOT_INITIAL, NOT_GUARDIAN);
+ pRootLC->parent = NULL;
+ pRootLC->lChild = create_child_word(newNode,OFIN);
+ pRootLC->rChild = create_child_word(pRootLCLeaf,OFIN);
+ pRootLC->move = NULL;
+ 
+ pRootLCLeaf->key = (keyspace1_size + 1);	 
+ pRootLCLeaf->color = BLACK;
+ pRootLCLeaf->opData = combine_oprec_status_child_opdata(NULL, NOT_OWNED, LEFT, NOT_INITIAL, NOT_GUARDIAN);
+ pRootLCLeaf->parent = NULL;
+ pRootLCLeaf->lChild = create_child_word(NULL,OFIN);
+ pRootLCLeaf->rChild = create_child_word(NULL,OFIN);
+ pRootLCLeaf->move = NULL;
 
   newNode->key = -1;
   newNode->color = BLACK;
   newNode->opData = combine_oprec_status_child_opdata(NULL, NOT_OWNED, LEFT, NOT_INITIAL, NOT_GUARDIAN);
-  //newDNode->valData = NULL;
   newNode->parent = pRoot;
   newNode->lChild = NULL;
   newNode->rChild = NULL;
   newNode->move = NULL;
   
   
+  //long rootkey2 =  in_order_visit((node_t*)get_child(pRootLC->lChild));
+  //std::cout << "Initial sanity check done" << std::endl;
   stop = 0;
 
 //Pre-populate Tree-------------------------------------------------
@@ -1518,25 +1398,37 @@ pRoot->key = (keyspace1_size + 1);
     data[i1].readSequenceNumber = 1;
     data[i1].seqNo = 0;
     	 Word key;
-    	
-    	while(data[0].numInsert < (keyspace1_size/2)){
-    		key = rand_r(&data[0].seed) % (keyspace1_size);
-	        while(key == 0){
-	      		key = rand_r(&data[0].seed) % (keyspace1_size);
-	      	} 
-    		pre_insert(&data[0], key);	
-    		leafNodes = 0;
-    		check_red_property((node_t*)get_child(pRoot->lChild));
-        blackCount = -1;
-        check_black_count((node_t*)get_child(pRoot->lChild), 0);
-        long rootkey =  in_order_visit((node_t*)get_child(pRoot->lChild));
-	      
-   	//long rootkey =  in_order_visit((node_t*)get_child(pRoot->lChild));
-    	}
+
+  while (data[0].numInsert < (keyspace1_size / 2)) {
+
+    key = rand_r(&data[0].seed) % (keyspace1_size);
+    while (key == 0) {
+      key = rand_r(&data[0].seed) % (keyspace1_size);
+    }
+    std::cout << "Inserting --" << key <<  std::endl;
+    pre_insert(&data[0], key);
+    std::cout << "Done Inserting --" << key << std::endl;
+    node_t* temp = (node_t*) get_child(pRoot->lChild);
+    node_t* newRoot = (node_t*) get_child(temp->lChild);
+
+
+    leafNodes = 0;
+    check_red_property(newRoot);
+    blackCount = -1;
+    check_black_count(newRoot, 0);
+    long rootkey = in_order_visit(newRoot);
+
+    //long rootkey =  in_order_visit((node_t*)get_child(pRoot->lChild));
+  }
     	int pre_inserts = data[0].numInsert;
     		//------------------------------------------------------------------- 
-    		std::cout << "Finished pre-population" << std::endl; 
-		//exit(0);
+    		std::cout << "Finished pre-population -- " << leafNodes << std::endl;
+    		exit(0); 
+    		/*check_red_property((node_t*)get_child(pRootLC->lChild));
+   blackCount = -1;
+   check_black_count((node_t*)get_child(pRootLC->lChild), 0);
+   long rootkey1 =  in_order_visit((node_t*)get_child(pRootLC->lChild));
+		exit(0); */
   
  
   barrier_init(&barrier, nb_threads + 1);
@@ -1662,10 +1554,10 @@ pRoot->key = (keyspace1_size + 1);
  
  std::cout << "Performing Sanity Check" << std::endl;
   
-   check_red_property((node_t*)get_child(pRoot->lChild));
+   check_red_property((node_t*)get_child(pRootLC->lChild));
    blackCount = -1;
-   check_black_count((node_t*)get_child(pRoot->lChild), 0);
-   long rootkey =  in_order_visit((node_t*)get_child(pRoot->lChild));
+   check_black_count((node_t*)get_child(pRootLC->lChild), 0);
+   long rootkey =  in_order_visit((node_t*)get_child(pRootLC->lChild));
  	
    unsigned long tot_inserts = 0;
    unsigned long tot_deletes = 0;

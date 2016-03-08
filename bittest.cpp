@@ -31,4 +31,5 @@ std::cout << "Oprec Status: " << extract_status_from_oprecord(word) << std::endl
 std::cout << "Address from addresses: " << (node_t *)get_address_from_addresses(word) << std::endl;
 
 std::cout << "Child Status: " << get_child_status(word) << std::endl;
+std::cout << "Child Address: " << (node_t *)get_child(word) << std::endl;
 }

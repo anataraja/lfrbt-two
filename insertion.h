@@ -1,41 +1,33 @@
-#include <iostream>
-#include "wfrbt.h"
-
+#pragma once
 
 
 bool is_external_node(node_t * current){
-	
-	
-	
-	if(((node_t *)get_child(current->lChild) == NULL) && ((node_t *)get_child(current->rChild) == NULL)){
-		return true;
-	}	
-	
-	return false;
-	
-
+  if(((node_t *)get_child(current->lChild) == NULL) && ((node_t *)get_child(current->rChild) == NULL)){
+    return true;
+  }
+  return false;
 }
 
 bool is_parent_of_external_node(node_t * current, long key){
-	node_t * next = NULL;
-	node_t * sib = NULL;
-	next = (node_t *)get_child(current->lChild);
-	sib = (node_t *)get_child(current->rChild);
-	if(next == NULL || sib == NULL){
-		std::cout << "Error. Leaf node, not parent." << std::endl;
-		exit(0);
-	}
-	if((is_external_node(next)) || (is_external_node(sib))){
-		return true;
-	}	
-	return false;
-}
+  node_t * next = (node_t *)get_child(current->lChild);
+  node_t * sib = (node_t *)get_child(current->rChild);
+#ifdef DEBUG
+  if(next == NULL || sib == NULL){
+    std::cout << "Error. Leaf node, not parent." << std::endl;
+    exit(0);
+  }
+#endif
 
+  if((is_external_node(next)) || (is_external_node(sib))){
+    return true;
+  }
+  return false;
+}
 
 node_t * check_insert_case_2(thread_data_t * data, node_t * wRootChildCopy, long key, int currentWindowSize, oprec_t * O ){
 	/// check if a black node with a black child is encountered
 	node_t * nextNode;
-	if(key <= wRootChildCopy->key){
+	if(key < wRootChildCopy->key){
 		nextNode = (node_t *)get_child(wRootChildCopy->lChild);
 	}
 	else{
@@ -61,7 +53,7 @@ node_t * check_insert_case_2(thread_data_t * data, node_t * wRootChildCopy, long
 #endif
 		if(nextNode->color == RED){
 			// find next node on access path
-			if(key <= nextNode->key){
+			if(key < nextNode->key){
 				nextNode = (node_t *)get_child(nextNode->lChild);
 			}
 			else{
@@ -74,8 +66,10 @@ node_t * check_insert_case_2(thread_data_t * data, node_t * wRootChildCopy, long
 			}
 			
 			depth++;
-			if(depth >= (currentWindowSize - 1))
+			if(depth >= (currentWindowSize - 1)){
+			  std::cout << "Window too small!!!" << std::endl;
 				return NULL;
+			}
 			else
 				continue;	
 		}
@@ -94,14 +88,17 @@ node_t * check_insert_case_2(thread_data_t * data, node_t * wRootChildCopy, long
 				}
 #endif
 				if(leftChild->color == BLACK){
+				  // Left child cannot be a leaf node
+				  if(is_external_node(leftChild)){
+				    return NULL;
+				  }
+
 					nextNode->opData = combine_oprec_status_child_opdata(O,OWNED,LEFT,NOT_INITIAL,NOT_GUARDIAN);
 					nextNode->creator = 98+depth;
 					nextNode->markedRoot = nextNode->parent;
-                                        if(nextNode->parent == NULL){
-                                          nextNode->markedRoot = wRootChildCopy;
-                                         // std::cout << "Error1" << std::endl;
-                                         // exit(0);
-                                        }
+          if(nextNode->parent == NULL){
+            nextNode->markedRoot = wRootChildCopy;
+          }
 					return nextNode; // one child is black of black node
 				}	
 			}
@@ -112,29 +109,32 @@ node_t * check_insert_case_2(thread_data_t * data, node_t * wRootChildCopy, long
 					std::cout << "Diff_Seq_124" << std::endl;
 				}	
 #endif
-				if(rightChild->color == BLACK){
+        if (rightChild->color == BLACK) {
+          if (is_external_node(rightChild)) {
+            return NULL;
+          }
 				  nextNode->opData = combine_oprec_status_child_opdata(O,OWNED,RIGHT,NOT_INITIAL,NOT_GUARDIAN);
 				  nextNode->creator = 117+depth;
 					nextNode->markedRoot = nextNode->parent;
-                                        if(nextNode->parent == NULL){
-                                          nextNode->markedRoot = wRootChildCopy;
-                                          //std::cout << "Error2" << std::endl;
-                                          //exit(0);
-                                        }
+          if(nextNode->parent == NULL){
+            nextNode->markedRoot = wRootChildCopy;
+          }
 					return nextNode; // one child is black of black node
 				}	
 			}
 			// both children are red
 
-			if(key <= nextNode->key){
+			if(key < nextNode->key){
 				nextNode = leftChild;
 			}
 			else{
 				nextNode = rightChild;
 			}
 			depth++;
-			if(depth >= (currentWindowSize - 1))
+			if(depth >= (currentWindowSize - 1)){
+			  std::cout << "Window too small!!!" << std::endl;
 				return NULL;
+			}
 			else
 				continue;	
 		}
@@ -145,13 +145,11 @@ node_t * check_insert_case_2(thread_data_t * data, node_t * wRootChildCopy, long
 
 node_t * check_insert_case_1(node_t * wRootChildCopy, long key, int currentWindowSize, oprec_t * O){
 	
-	//std::cout << "cas1" << std::endl;	
 	int depth = 1;
 	node_t * cur = wRootChildCopy;
 	node_t * next = NULL;
 	node_t * last = NULL;
-	while(depth <= (WINDOW_SIZE - 1)){
-			
+	while(depth < (WINDOW_SIZE - 1)){
 		if(is_external_node(cur)){
 			if(depth > 0){
 				return(last);
@@ -161,12 +159,12 @@ node_t * check_insert_case_1(node_t * wRootChildCopy, long key, int currentWindo
 				exit(0);
 			}
 		}
-		#ifdef DEBUG
+#ifdef DEBUG
 		if(cur->seq != O->seq){
 			std::cout << "Diff_seq_186" << std::endl;
 		}	
-		#endif		
-		if(key <= cur->key){
+#endif		
+		if(key < cur->key){
 			next = (node_t *)get_child(cur->lChild);
 		}
 		else{
@@ -175,47 +173,50 @@ node_t * check_insert_case_1(node_t * wRootChildCopy, long key, int currentWindo
 			
 		depth++;
 		if(depth > (currentWindowSize)){
-			
+			std::cout << "Depth = " << depth << "__" << currentWindowSize  << std::endl;
 			return NULL; // does not satisfy case 1
 		}
 		last = cur;
 		cur = next;	
 	}
+	std::cout << "Broke out here" << std::endl;
 	return NULL;
 	// satisfies case 1
-	
-	
 }
 
 
 node_t * balance_after_insertion(thread_data_t * data, node_t * cur, node_t * wRootChildCopy){
-	node_t * pNode = cur->parent;
+	std::cout << "Calling balance_after_ins " << std::endl;
+
+  node_t * pNode = cur->parent;
 	if(pNode == NULL){
+	  //std::cout << "Should not be here0!" << std::endl;
+	  //exit(0);
+	  std::cout << "pNode is wrootRC" << std::endl;
 		pNode = wRootChildCopy;
 	}
 	
 	//NOTE: Children of windowRoot also have NULL for parent
 	if(pNode->color == BLACK){
-			//std::cout << "cbi174" << std::endl;
-			//windowRootDataNode->balcase = 179;
+	    std::cout << "ret 0" << std::endl;
 			return wRootChildCopy;
 		}
 
 	// now current node and its parent are red
 
 	node_t * pPNode = pNode->parent; // Parent of parent node
-	//dataNode_t * pPDataNode = NULL;
 	if(pPNode == NULL){
+	  //std::cout << "Should not be here1!" << std::endl;
+	  //   exit(0);
 		// Parent of parent does not exist.
     if(pNode == wRootChildCopy){
-		  //std::cout << "cbi186" << std::endl;
 			pNode->color = BLACK;
-			//pDataNode->balcase = 192;
-		
+			std::cout << "ret 1" << std::endl;
 			return pNode;
     }
 	  else{
 			// parent is child of windowRoot
+	    std::cout << "ppNode is wrootRC" << std::endl;
 			pPNode = wRootChildCopy;
 		}
 	}
@@ -234,6 +235,7 @@ node_t * balance_after_insertion(thread_data_t * data, node_t * cur, node_t * wR
 
 	// case 3b
 	if(pSNode->color == RED){
+	  std::cout << "3b" << std::endl;
   	// both parent and uncle are red
 		// color parent and uncle black, color parent(parent) red and proceed upwards
 			
@@ -242,18 +244,17 @@ node_t * balance_after_insertion(thread_data_t * data, node_t * cur, node_t * wR
 		pPNode->color = RED;
 		// Only the root of the tree can have two of its children red
 		if(pPNode == wRootChildCopy){
-			//windowRootDataNode->balcase = 237;
+		  std::cout << "ret 2" << std::endl;
 			return wRootChildCopy;
 		}
 		
 		// otherwise we proceed upwards
 		node_t * finalRootNode = balance_after_insertion(data, pPNode, wRootChildCopy);
-		//finalRootDataNode->balcase = 246;
 		return finalRootNode;
 	}
 	else{
 	  /// case 3d and 3e - Uncle is black
-		//std::cout << "3d,3e" << std::endl;
+		std::cout << "3d,3e" << std::endl;
 
 		node_t * pPPNode = NULL;
 		if(pPNode == wRootChildCopy){
@@ -270,38 +271,20 @@ node_t * balance_after_insertion(thread_data_t * data, node_t * cur, node_t * wR
 		if((node_t *)get_child(pNode->lChild) == cur){
 		  // curNode is left Child of parent
 			// case 3d(a)
-			//std::cout << "3d(a)" << std::endl;
+			std::cout << "3d(a)" << std::endl;
 			if((node_t *)get_child(pPNode->lChild) == pNode){
 			  // parent is also left child
-				//std::cout << "3d(a)LL" << std::endl;
-				if(pPPNode == NULL){
+				std::cout << "3d(a)LL" << std::endl;
 				  pPNode->lChild = pNode->rChild;
 					pNode->rChild = create_child_word(pPNode,OFIN);
 					pNode->color = BLACK;
 					pPNode->color = RED;
 					return pNode;
-				}
-				else{
-					pPNode->lChild = pNode->rChild;
-					pNode->rChild = create_child_word(pPNode,OFIN);
-					pNode->color = BLACK;
-					pPNode->color = RED;
-					if((node_t *)get_child(pPPNode->lChild) == pPNode){
-						pPPNode->lChild = create_child_word(pNode,OFIN);
-					}
-					else if((node_t *)get_child(pPPNode->rChild) == pPNode){
-						pPPNode->rChild = create_child_word(pNode,OFIN);
-					}
-					else{
-						std::cout << "This should never happen. Failure in Case LL " << std::endl;
-						exit(0);
-					}
-				}
 			}
 			else{ 
 			  // parent is right child
 				// parent of parent is root of tree
-				//std::cout << "3d(a)RL" << std::endl;
+				std::cout << "3d(a)RL" << std::endl;
 				if(pPPNode == NULL){
 				  pNode->lChild = cur->rChild;
 					pPNode->rChild = cur->lChild;
@@ -312,7 +295,7 @@ node_t * balance_after_insertion(thread_data_t * data, node_t * cur, node_t * wR
 					return cur;
 				}
 				else{
-				  //std::cout << "3d(a)340" << std::endl;
+				  std::cout << "3d(a)340" << std::endl;
 				  pNode->lChild = cur->rChild;
 					pPNode->rChild = cur->lChild;
 					cur->rChild = create_child_word(pNode,OFIN);
@@ -335,7 +318,7 @@ node_t * balance_after_insertion(thread_data_t * data, node_t * cur, node_t * wR
 		else{ // current node is right child of parent
 		  if((node_t *)get_child(pPNode->lChild) == pNode){
 				// case 3e
-				//std::cout << "3e(a)" << std::endl;
+				std::cout << "3e(a)" << std::endl;
 				if(pPPNode == NULL){
 					pNode->rChild = cur->lChild;
 					pPNode->lChild = cur->rChild;
@@ -346,7 +329,7 @@ node_t * balance_after_insertion(thread_data_t * data, node_t * cur, node_t * wR
 					return cur;
 				}
 				else{
-					//std::cout << "3e(b)" << std::endl;
+					std::cout << "3e(b)" << std::endl;
 					pNode->rChild = cur->lChild;
 					pPNode->lChild = cur->rChild;
 					cur->lChild = create_child_word(pNode,OFIN);
@@ -367,32 +350,13 @@ node_t * balance_after_insertion(thread_data_t * data, node_t * cur, node_t * wR
 			}
 			else if((node_t *)get_child(pPNode->rChild) == pNode){ 
 			  // parent is right child
-				//std::cout << "3eRR" << std::endl;
-				if(pPPNode == NULL){
+				std::cout << "3eRR" << std::endl;
 					pPNode->rChild = pNode->lChild;
 					pNode->lChild = create_child_word(pPNode,OFIN);
 					pNode->color = BLACK;
 					pPNode->color = RED;
 					return pNode;
-				}
-				else{
-					//std::cout << "3e433" << std::endl;
-					pPNode->rChild = pNode->lChild;
-					pNode->lChild = create_child_word(pPNode,OFIN);
-					pNode->color = BLACK;
-					pPNode->color = RED;
 
-					if((node_t *)get_child(pPPNode->lChild) == pPNode){
-						pPPNode->lChild = create_child_word(pNode,OFIN);
-					}
-					else if((node_t *)get_child(pPPNode->rChild) == pPNode){
-						pPPNode->rChild = create_child_word(pNode,OFIN);
-					}
-					else{
-					  std::cout << "This should never happen. Failure in Case RR " << std::endl;
-						exit(0);
-					}
-				}
 			}
 			else{
 				std::cout << "Aha! What new garbage is this?" << std::endl;
@@ -403,14 +367,10 @@ node_t * balance_after_insertion(thread_data_t * data, node_t * cur, node_t * wR
 	return NULL;
 }
 
-/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-
-
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * wRootChild, node_t * wRootChildCopy, long key, int currentWindowSize, AO_t casField, oprec_t * O){
+node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * wRootChild, node_t * anchor, node_t * wRootChildCopy, long key, int currentWindowSize, AO_t casField, oprec_t * O){
 	node_t * lc = (node_t *)get_child(wRootChildCopy->lChild);
 	node_t * rc = (node_t *)get_child(wRootChildCopy->rChild);
 #ifdef DEBUG
@@ -421,7 +381,7 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 	int depth = 0;
 	node_t * nextNode;
 	
-	if(key <= wRootChildCopy->key){
+	if(key < wRootChildCopy->key){
 		nextNode = lc;
 	}
 	else{
@@ -451,8 +411,8 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 			
 			depth+= 2;
 			if(depth < WINDOW_SIZE){
-			  if(key <= nextNode->key){
-				  if(key <= leftChild->key){
+			  if(key < nextNode->key){
+				  if(key < leftChild->key){
 				  	nextNode = (node_t *)get_child(leftChild->lChild);
 			  	}
 				  else{
@@ -460,7 +420,7 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 				  }
 		  	}
 			  else{
-				  if(key <= rightChild->key){
+				  if(key < rightChild->key){
 					  nextNode = (node_t *)get_child(rightChild->lChild);
 				  }
 				  else{
@@ -490,7 +450,7 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 		leftChild1->color = BLACK;
 		rightChild1->color = BLACK;
 		
-		if(key <= nextNode->key){
+		if(key < nextNode->key){
 			nextNode = leftChild1;
 		}
 		else{
@@ -513,7 +473,7 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 					exit(0);
 				}
 				
-				wRootChildCopy->move = nextRoot;
+				anchor->move = nextRoot;
 				
 				nextNode->opData = 	combine_oprec_status_child_opdata(O,OWNED,LEFT,NOT_INITIAL,NOT_GUARDIAN);
 				nextNode->creator = 519;
@@ -521,20 +481,18 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 		 		
 		 	}
 		else{
-			wRootChildCopy->move = NULL;
+			anchor->move = NULL;
 		}
 						
 		
 		int child = extract_child_from_opdata(casField);
 		int result0;
 		if(child == LEFT){
-			result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(wRootChildCopy,ONEED));
+			result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		}
 		else{
-			result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(wRootChildCopy,ONEED));
+			result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		}
-		
-		//int result1 = atomic_cas_full1(data, wRoot, casField, combine_oprec_status_child_opdata(O, DONE, child));
 		
 		return NULL;				
 	  }
@@ -543,7 +501,7 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 		// Y is the child of X
 		node_t * Y = nextNode;
 		
-		if(key <= nextNode->key){
+		if(key < nextNode->key){
 			nextNode = (node_t *)get_child(nextNode->lChild);
 		}
 		else{
@@ -551,10 +509,6 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 		}
 		node_t * Y1 = nextNode;
 		depth = 2;
-		
-		//nextDNode = (dataNode_t *)extract_dnode_from_ptrnode(*(nextNode));
-		
-	
 		
 		while(depth <= 6){
 			// set nextDNode color to red	
@@ -566,27 +520,23 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 			rightC->color = BLACK;
 			depth+= 2;
 			if(depth < WINDOW_SIZE){
-			if(key <= nextNode->key){
-				if(key <= leftC->key){
-					nextNode = (node_t *)get_child(leftC->lChild);
-				}
-				else{
-					nextNode = (node_t *)get_child(leftC->rChild);
-				}
+			  if(key < nextNode->key){
+			  	if(key < leftC->key){
+			  		nextNode = (node_t *)get_child(leftC->lChild);
+			  	}
+				  else{
+				  	nextNode = (node_t *)get_child(leftC->rChild);
+			  	}
+			  }
+			  else{
+				  if(key < rightC->key){
+				  	nextNode = (node_t *)get_child(rightC->lChild);
+			  	}
+				  else{
+				  	nextNode = (node_t *)get_child(rightC->rChild);
+				  }
+			  }
 			}
-			else{
-				if(key <= rightC->key){
-					nextNode = (node_t *)get_child(rightC->lChild);
-				}
-				else{
-					nextNode = (node_t *)get_child(rightC->rChild);
-				}
-				
-			}
-			//nextNode = (dataNode_t *)extract_dnode_from_ptrnode(*(nextNode));
-			}
-				
-			
 		}
 		
 		
@@ -597,7 +547,7 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 			leftC1->color = BLACK;
 			rightC1->color = BLACK;
 			
-		if(key <= nextNode->key){
+		if(key < nextNode->key){
 			nextNode = leftC1;
 		}
 		else{
@@ -608,16 +558,16 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 		
 		node_t * finalWRoot = balance_after_insertion(data, Y1, wRootChildCopy);
 		
-		
-		//if(finalWindowRootDataNode != rootDNode){
-			//rootDNode->op = operation;
-			
-		//}
-		
-		if(finalWRoot != NULL){
+		if (finalWRoot != NULL) {
+      // Update anchor node's child to point to finalWRoot
+      int which_child_of_anchor = extract_child_from_opdata(wRootChild->opData);
+      if (which_child_of_anchor == LEFT) {
+        anchor->lChild = create_child_word(finalWRoot, OFIN);
+      } else {
+        anchor->rChild = create_child_word(finalWRoot, OFIN);
+      }
 	 	
 	 		if(nextNode != NULL){
-		 		//nextNode->field.AO_val1 = combine_move_and_procid(NULL,pid);
 				
 				node_t * nextRoot = nextNode->parent;
 				if((node_t *)get_child(nextRoot->lChild) == nextNode){
@@ -630,15 +580,13 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 					std::cout << "Parent Pointer incorrectly assigned. 728" << std::endl;
 					exit(0);
 				}
-				
-				finalWRoot->move = nextRoot;
-				//finalWRoot->mover = 774;
+				anchor->move = nextRoot;
 				nextNode->opData = 	combine_oprec_status_child_opdata(O,OWNED,LEFT,NOT_INITIAL,NOT_GUARDIAN);
 				nextNode->creator = 637;
 				nextNode->markedRoot = nextRoot;
 		 	}
 		 	else{
-		 		finalWRoot->move = NULL;
+		 		anchor->move = NULL;
 		 	}
 		  int child = extract_child_from_opdata(casField);
 		  int result0;
@@ -648,9 +596,6 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 		  else{
 			  result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(finalWRoot,ONEED));
 		  }
-		
-		  //int result1 = atomic_cas_full1(data, wRoot, casField, combine_oprec_status_child_opdata(O, DONE, child));
-		
 			return NULL;		
 		}
 		else{
@@ -667,22 +612,22 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 					exit(0);
 				}
 				
-				wRootChildCopy->move = nextRoot;
+				anchor->move = nextRoot;
 				nextNode->opData = combine_oprec_status_child_opdata(O,OWNED,LEFT,NOT_INITIAL,NOT_GUARDIAN);
 				nextNode->creator = 672;
 				nextNode->markedRoot = nextRoot;
 		 	}
 		 	else{
-		 		wRootChildCopy->move = NULL;
+		 		anchor->move = NULL;
 		 	}	
 		
 		  int child = extract_child_from_opdata(casField);
 		  int result0;
 		  if(child == LEFT){
-			  result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(wRootChildCopy,ONEED));
+			  result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		  }
 		  else{
-			  result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(wRootChildCopy,ONEED));
+			  result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		  }
 		  return NULL;				
 		}
@@ -692,14 +637,14 @@ node_t * handle_case_3(thread_data_t * data, int pid, node_t * wRoot, node_t * w
 
 
 
-node_t * get_next_node_on_access_path(thread_data_t * data, int pid, node_t * wRoot, node_t * wRootChild, node_t * wRootChildCopy, long key, int currentWindowSize, AO_t casField, bool case2flag, oprec_t * O){
+node_t * get_next_node_on_access_path(thread_data_t * data, int pid, node_t * wRoot, node_t * wRootChild, node_t * anchor, node_t * wRootChildCopy, long key, int currentWindowSize, AO_t casField, bool case2flag, oprec_t * O){
 	
 	// CHECK THAT ROOT OF WINDOW IS BLACK
 	
 	node_t * nextNode;
 	if(!case2flag ){
 		
-	  nextNode = check_insert_case_2(data, wRootChildCopy, key, currentWindowSize, O);
+	  nextNode = check_insert_case_2(data, wRootChildCopy, key, currentWindowSize-1, O);
 	  if(nextNode == NULL){
 		  //std::cout << "case 2 fail" << std::endl;
 	  }
@@ -707,7 +652,10 @@ node_t * get_next_node_on_access_path(thread_data_t * data, int pid, node_t * wR
 	 	  //std::cout << "case 2 succeed" << std::endl;
  		  node_t * nextRoot = nextNode->parent;
  		  if(nextRoot == NULL){
-		    nextRoot = wRootChildCopy;
+		    //nextRoot = wRootChildCopy;
+ 		    // Should never reach here. In this case, the anchor should become the guardian of the next window
+ 		    std::cout << "Anchor node should be next guardian" << std::endl;
+ 		    exit(0);
 		  }
 		 		
 		  if((node_t *)get_child(nextRoot->lChild) == nextNode){
@@ -721,60 +669,33 @@ node_t * get_next_node_on_access_path(thread_data_t * data, int pid, node_t * wR
 		  	exit(0);
 		  }
 	 	
-	 	  wRootChildCopy->move = nextRoot;
+	 	  anchor->move = nextRoot;
 	 		
-#ifdef DEBUG
-		  if(nextRoot == wRootChildCopy){
-			  wRootChildCopy->mover = 967;		
-			}
-			else{
-				wRootChildCopy->mover = 968;
-			}			
-#endif
-		
 		  int child = extract_child_from_opdata(casField);
 		  int result0;
 	  	if(child == LEFT){
-			  result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(wRootChildCopy,ONEED));
+			  result0 = atomic_cas_full(&wRoot->lChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		  }
 		  else{
-			  result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(wRootChildCopy,ONEED));
+			  result0 = atomic_cas_full(&wRoot->rChild, create_child_word(wRootChild,OFIN),create_child_word(anchor,ONEED));
 		  }
-		
-		  //int result1 = atomic_cas_full1(data, wRoot, casField, combine_oprec_status_child_opdata(O, DONE, child));
-#ifdef DEBUG		  
-		  if(result1 == 1){
-			  AO_t childWord;
-			  if(child == LEFT){
-				  childWord = wRoot->lChild;
-			  }
-			  else{
-				  childWord = wRoot->rChild;
-			  }	
-		
 
-			  if((node_t *)get_child(childWord) == O->sr->addresses[1]){
-				  std::cout << "Error--1008" << std::endl;
-			  }
-		  }
-#endif		  						
-               data->madeDecision = true;
-               return NULL;
+      data->madeDecision = true;
+      return NULL;
 	  } 
   }
 	
 	// check for case 1		
 	// i.e. whether an external node is encountered
-	nextNode = check_insert_case_1(wRootChildCopy, key, currentWindowSize,O);
+	nextNode = check_insert_case_1(wRootChildCopy, key, currentWindowSize-1,O);
 	
 	if(nextNode != NULL){
-		//std::cout << "case1 succ" << std::endl;
 		data->madeDecision = true;
 		return (nextNode);
 	}
 //	Does not satisfy cases 1 and 2. May need to increase the size of the window
 
-	if(currentWindowSize < 10 ){
+	if(currentWindowSize < 11 ){
 		return NULL;
 	}
 	
@@ -782,7 +703,7 @@ node_t * get_next_node_on_access_path(thread_data_t * data, int pid, node_t * wR
 	 
 	 // extend the current window by 1 if Y is not X
 	 
-	if(key <= wRootChildCopy->key){
+	if(key < wRootChildCopy->key){
 		nextNode = (node_t *)get_child(wRootChildCopy->lChild);
 	}
 	else{
@@ -791,16 +712,16 @@ node_t * get_next_node_on_access_path(thread_data_t * data, int pid, node_t * wR
 	
 	if(nextNode->color == RED){
 	 
-		node_t * lastPtrNode = set_last_node(data, wRootChildCopy, currentWindowSize, key);
-	  lastPtrNode = extend_current_window(data, lastPtrNode, key, currentWindowSize, wRoot, casField,O);
+		node_t * lastPtrNode = set_last_node(data, wRootChildCopy, currentWindowSize-1, key);
+	  lastPtrNode = extend_current_window(data, lastPtrNode, key, currentWindowSize-1, wRoot, casField,O);
 		node_t * bot = (node_t *)map_word_to_bot_address(1);
 		if(lastPtrNode == bot){
 		  data->madeDecision = true;
 			return NULL;	 
 		}	
 	}		
-	nextNode = handle_case_3(data, pid, wRoot, wRootChild, wRootChildCopy, key, WINDOW_SIZE - 1, casField, O);
-	//std::cout << "****HANDLED CASE 3****" << std::endl;
+	nextNode = handle_case_3(data, pid, wRoot, wRootChild,anchor, wRootChildCopy, key, WINDOW_SIZE - 1, casField, O);
+	std::cout << "****HANDLED CASE 3****" << std::endl;
 	data->madeDecision = true;
 	return NULL;
 }

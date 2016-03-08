@@ -1,3 +1,5 @@
+#pragma once
+
 
 void seek(thread_data_t * data, oprec_t * O, long key, seekrec_t * R){
   //std::cout << "SEEK" << std::endl;
@@ -12,7 +14,7 @@ void seek(thread_data_t * data, oprec_t * O, long key, seekrec_t * R){
 	
   node_t * candidate;
 	
-  if(key <= root->key){
+  if(key < root->key){
     candidate = (node_t *)get_child(root->lChild);
   }
   else{
@@ -23,13 +25,13 @@ void seek(thread_data_t * data, oprec_t * O, long key, seekrec_t * R){
   R->contents[1] = (candidate->opData);
   R->length = 2;  
   
-  if(key <= candidate->key){
+  if(key < candidate->key){
     candidate = (node_t *)get_child(candidate->lChild);
   }
   else{
     candidate = (node_t *)get_child(candidate->rChild);
   }
-	
+  std::cout << "ROOT_IPATH__" << root << "__" << candidate << std::endl;
   if(candidate != NULL){
     //std::cout << "HERE" << std::endl;	
     AO_t curContents = (candidate->opData);
@@ -53,7 +55,7 @@ void seek(thread_data_t * data, oprec_t * O, long key, seekrec_t * R){
     }
 		
     if(!flag){
-	    // Leaf ndoe not encountered in delete window
+	    // Leaf node not encountered in delete window
 	    is_invariant_satisfied(data, candidate, curContents, O, R);
 	    // R is already updated
     }
@@ -62,7 +64,7 @@ void seek(thread_data_t * data, oprec_t * O, long key, seekrec_t * R){
       node_t * next;
       AO_t nextContents;
       
-      if(key <= candidate->key){
+      if(key < candidate->key){
 	      next = (node_t *)get_child(candidate->lChild);
       }
       else{
@@ -99,7 +101,7 @@ void search(thread_data_t * data, long key){
 	
 	while(root != NULL){
 		
-		if(key <= root->key){
+		if(key < root->key){
 			root = (node_t *)get_child(root->lChild);
 		}
 		else{
@@ -115,7 +117,7 @@ long update_search(thread_data_t * data, long key){
 	
 	while(!is_external_node(root)){
 		
-		if(key <= root->key){
+		if(key < root->key){
 			root = (node_t *)get_child(root->lChild);
 		}
 		else{
